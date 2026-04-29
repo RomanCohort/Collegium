@@ -1,0 +1,144 @@
+# 因子配置文件
+# 定义因子名称、类型、描述和参数
+
+factors:
+  # ==================== 技术因子 ====================
+  momentum:
+    - name: return_1m
+      description: "1个月动量因子(过去1个月收益率)"
+      category: momentum
+      params:
+        period: 20  # 交易日，约1个月
+
+    - name: return_3m
+      description: "3个月动量因子"
+      category: momentum
+      params:
+        period: 60
+
+    - name: return_6m
+      description: "6个月动量因子"
+      category: momentum
+      params:
+        period: 120
+
+    - name: return_12m
+      description: "12个月动量因子"
+      category: momentum
+      params:
+        period: 240
+
+  reversal:
+    - name: reversal_1w
+      description: "1周反转因子"
+      category: reversal
+      params:
+        period: 5
+
+    - name: reversal_1m
+      description: "1月反转因子"
+      category: reversal
+      params:
+        period: 20
+
+  volatility:
+    - name: volatility_1m
+      description: "1个月收益率波动率"
+      category: volatility
+      params:
+        period: 20
+
+    - name: volatility_3m
+      description: "3个月收益率波动率"
+      category: volatility
+      params:
+        period: 60
+
+  volume:
+    - name: turnover_rate
+      description: "换手率"
+      category: volume
+      params: {}
+
+    - name: volume_ratio
+      description: "成交量与均量比值"
+      category: volume
+      params:
+        ma_period: 20
+
+  # ==================== 基本面因子 ====================
+  valuation:
+    - name: pe_ttm
+      description: "滚动市盈率TTM"
+      category: valuation
+      params: {}
+
+    - name: pb
+      description: "市净率"
+      category: valuation
+      params: {}
+
+    - name: ps_ttm
+      description: "滚动市销率TTM"
+      category: valuation
+      params: {}
+
+    - name: pc
+      description: "市现率"
+      category: valuation
+      params: {}
+
+  quality:
+    - name: roe
+      description: "净资产收益率"
+      category: quality
+      params: {}
+
+    - name: roa
+      description: "资产收益率"
+      category: quality
+      params: {}
+
+    - name: debt_ratio
+      description: "资产负债率"
+      category: quality
+      params: {}
+
+    - name: gross_margin
+      description: "毛利率"
+      category: quality
+      params: {}
+
+  growth:
+    - name: revenue_growth
+      description: "营收增长率"
+      category: growth
+      params: {}
+
+    - name: profit_growth
+      description: "利润增长率"
+      category: growth
+      params: {}
+
+# ==================== 默认因子权重 ====================
+default_weights:
+  # 因子名称: 权重
+  return_1m: 0.10
+  return_3m: 0.15
+  return_6m: 0.10
+  reversal_1m: -0.05  # 反转因子权重可以为负
+  volatility_1m: -0.05  # 低波动因子
+  turnover_rate: 0.05
+  pe_ttm: -0.10  # 低估值
+  pb: -0.10
+  roe: 0.15
+  revenue_growth: 0.10
+  profit_growth: 0.10
+
+# ==================== 策略参数 ====================
+strategy_params:
+  top_n: 50  # 每期持仓股票数量
+  rebalance_freq: "monthly"  # 月度调仓
+  max_weight: 0.05  # 单只股票最大权重5%
+  min_weight: 0.01  # 单只股票最小权重1%
+  industry_constraint: true  # 行业中性化约束

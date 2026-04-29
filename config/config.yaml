@@ -1,0 +1,49 @@
+# 量化交易系统配置文件
+
+# 数据库配置
+database:
+  host: localhost
+  port: 5432
+  database: quant_db
+  user: postgres
+  password: postgres
+  pool_size: 5
+
+# 数据源配置
+data_source:
+  akshare:
+    enabled: true
+    retry_times: 3
+    retry_delay: 5  # 秒
+    timeout: 30  # 秒
+
+# 交易配置
+trading:
+  # A股交易成本
+  commission_rate: 0.0003  # 佣金万分之3
+  stamp_tax: 0.001  # 印花税千分之1 (卖出时收取)
+  slippage: 0.001  # 滑点千分之1
+
+  # 回测配置
+  backtest:
+    initial_cash: 1000000  # 初始资金100万
+    benchmark: "000300.SH"  # 沪深300指数
+
+# 日志配置
+logging:
+  level: INFO
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/quant.log"
+  console: true
+
+# 因子配置
+factors:
+  # 因子预处理参数
+  preprocess:
+    winsorize_std: 3  # MAD去极值的标准差倍数
+    standardize_method: "zscore"  # zscore/minmax
+
+  # 因子评估参数
+  evaluate:
+    ic_periods: [5, 10, 20]  # IC计算持有期
+    top_n_groups: 10  # 分组测试的组数
