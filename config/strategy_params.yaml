@@ -1,0 +1,42 @@
+"""
+策略参数配置文件
+支持 YAML 格式，方便调参实验
+"""
+
+# 动量策略参数
+momentum:
+  lookback_period: 20        # 回看周期
+  holding_period: 10         # 持仓周期
+  min_return_threshold: 0.05 # 最小动量阈值
+  volume_filter: true        # 是否过滤成交量
+
+# 均值回归策略参数
+mean_reversion:
+  window: 20                 # 计算窗口
+  entry_zscore: 2.0          # 入场 Z-score
+  exit_zscore: 0.5           # 出场 Z-score
+  use_bollinger: false       # 是否使用布林带
+
+# 多因子策略参数
+multi_factor:
+  top_n: 30                  # 选股数量
+  rebalance_freq: 5          # 调仓频率（天）
+  factor_weights:
+    value: 0.25              # 价值因子权重
+    momentum: 0.25           # 动量因子权重
+    quality: 0.25            # 质量因子权重
+    low_vol: 0.25            # 低波动因子权重
+  min_score_threshold: 0.6   # 最小综合得分
+
+# 双均线策略参数
+dual_ma:
+  fast_period: 5             # 快线周期
+  slow_period: 20            # 慢线周期
+  signal_type: "cross"       # cross / slope
+
+# 配对交易策略参数
+pairs_trading:
+  lookback: 60               # 协整检验窗口
+  entry_spread: 2.0          # 入场 spread Z-score
+  exit_spread: 0.0           # 出场 spread Z-score
+  min_correlation: 0.7       # 最小相关性

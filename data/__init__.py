@@ -1,7 +1,4 @@
-"""
-__init__ for data package
-"""
-
-from .database import Database, get_database
-
-__all__ = ['Database', 'get_database']
+"""Data package"""
+from .fetcher import DataFetcher, fetcher
+from .storage import DataStorage, storage
+from .cleaner import DataCleaner, cleaner

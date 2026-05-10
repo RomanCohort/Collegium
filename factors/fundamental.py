@@ -1,193 +1,171 @@
 """
-基本面因子实现
+基本面因子计算模块
+包含价值、质量、成长等基本面因子
 """
-
 import pandas as pd
 import numpy as np
-from typing import Dict, Optional
-
-from .base import FactorBase
-from ..utils import log
+from typing import Optional
+from utils.logger import log
 
 
-class PEFactor(FactorBase):
-    """市盈率因子（低估值）"""
-
-    def __init__(self, **kwargs):
-        super().__init__("pe_ttm", "valuation", kwargs)
-
-    def calculate(self, data: pd.DataFrame) -> pd.Series:
-        """使用数据中的pe_ttm列"""
-        if 'pe_ttm' not in data.columns:
-            log.warning("PE因子需要pe_ttm列")
-            return pd.Series(dtype=float)
-
-        return data.set_index(['code', 'date'])['pe_ttm']
+def pe_ratio(price: pd.Series, eps: pd.Series) -> pd.Series:
+    """市盈率"""
+    return price / eps.replace(0, np.nan)
 
 
-class PBFactor(FactorBase):
-    """市净率因子（低估值）"""
-
-    def __init__(self, **kwargs):
-        super().__init__("pb", "valuation", kwargs)
-
-    def calculate(self, data: pd.DataFrame) -> pd.Series:
-        if 'pb' not in data.columns:
-            log.warning("PB因子需要pb列")
-            return pd.Series(dtype=float)
-
-        return data.set_index(['code', 'date'])['pb']
+def pb_ratio(price: pd.Series, bvps: pd.Series) -> pd.Series:
+    """市净率"""
+    return price / bvps.replace(0, np.nan)
 
 
-class PSFactor(FactorBase):
-    """市销率因子"""
-
-    def __init__(self, **kwargs):
-        super().__init__("ps_ttm", "valuation", kwargs)
-
-    def calculate(self, data: pd.DataFrame) -> pd.Series:
-        if 'ps_ttm' not in data.columns:
-            log.warning("PS因子需要ps_ttm列")
-            return pd.Series(dtype=float)
-
-        return data.set_index(['code', 'date'])['ps_ttm']
+def ps_ratio(price: pd.Series, revenue_per_share: pd.Series) -> pd.Series:
+    """市销率"""
+    return price / revenue_per_share.replace(0, np.nan)
 
 
-class ROEFactor(FactorBase):
-    """净资产收益率因子（高质量）"""
-
-    def __init__(self, **kwargs):
-        super().__init__("roe", "quality", kwargs)
-
-    def calculate(self, data: pd.DataFrame) -> pd.Series:
-        if 'roe' not in data.columns:
-            log.warning("ROE因子需要roe列")
-            return pd.Series(dtype=float)
-
-        return data.set_index(['code', 'date'])['roe']
+def roe(net_income: pd.Series, equity: pd.Series) -> pd.Series:
+    """净资产收益率"""
+    return net_income / equity.replace(0, np.nan)
 
 
-class ROAFactor(FactorBase):
-    """资产收益率因子"""
-
-    def __init__(self, **kwargs):
-        super().__init__("roa", "quality", kwargs)
-
-    def calculate(self, data: pd.DataFrame) -> pd.Series:
-        if 'roa' not in data.columns:
-            log.warning("ROA因子需要roa列")
-            return pd.Series(dtype=float)
-
-        return data.set_index(['code', 'date'])['roa']
+def roa(net_income: pd.Series, total_assets: pd.Series) -> pd.Series:
+    """总资产收益率"""
+    return net_income / total_assets.replace(0, np.nan)
 
 
-class DebtRatioFactor(FactorBase):
-    """资产负债率因子（低负债）"""
-
-    def __init__(self, **kwargs):
-        super().__init__("debt_ratio", "quality", kwargs)
-
-    def calculate(self, data: pd.DataFrame) -> pd.Series:
-        if 'debt_ratio' not in data.columns:
-            log.warning("资产负债率因子需要debt_ratio列")
-            return pd.Series(dtype=float)
-
-        return data.set_index(['code', 'date'])['debt_ratio']
+def gross_margin(revenue: pd.Series, cost: pd.Series) -> pd.Series:
+    """毛利率"""
+    return (revenue - cost) / revenue.replace(0, np.nan)
 
 
-class GrossMarginFactor(FactorBase):
-    """毛利率因子"""
-
-    def __init__(self, **kwargs):
-        super().__init__("gross_margin", "quality", kwargs)
-
-    def calculate(self, data: pd.DataFrame) -> pd.Series:
-        if 'gross_margin' not in data.columns:
-            log.warning("毛利率因子需要gross_margin列")
-            return pd.Series(dtype=float)
-
-        return data.set_index(['code', 'date'])['gross_margin']
+def net_margin(net_income: pd.Series, revenue: pd.Series) -> pd.Series:
+    """净利率"""
+    return net_income / revenue.replace(0, np.nan)
 
 
-class RevenueGrowthFactor(FactorBase):
-    """营收增长率因子"""
-
-    def __init__(self, **kwargs):
-        super().__init__("revenue_growth", "growth", kwargs)
-
-    def calculate(self, data: pd.DataFrame) -> pd.Series:
-        if 'revenue_growth' not in data.columns:
-            log.warning("营收增长率因子需要revenue_growth列")
-            return pd.Series(dtype=float)
-
-        return data.set_index(['code', 'date'])['revenue_growth']
+def debt_ratio(total_liabilities: pd.Series, total_assets: pd.Series) -> pd.Series:
+    """资产负债率"""
+    return total_liabilities / total_assets.replace(0, np.nan)
 
 
-class ProfitGrowthFactor(FactorBase):
-    """利润增长率因子"""
-
-    def __init__(self, **kwargs):
-        super().__init__("profit_growth", "growth", kwargs)
-
-    def calculate(self, data: pd.DataFrame) -> pd.Series:
-        if 'profit_growth' not in data.columns:
-            log.warning("利润增长率因子需要profit_growth列")
-            return pd.Series(dtype=float)
-
-        return data.set_index(['code', 'date'])['profit_growth']
+def current_ratio(current_assets: pd.Series, current_liabilities: pd.Series) -> pd.Series:
+    """流动比率"""
+    return current_assets / current_liabilities.replace(0, np.nan)
 
 
-class OperatingCashFlowFactor(FactorBase):
-    """经营现金流因子"""
-
-    def __init__(self, **kwargs):
-        super().__init__("ocf", "quality", kwargs)
-
-    def calculate(self, data: pd.DataFrame) -> pd.Series:
-        if 'ocf' not in data.columns:
-            return pd.Series(dtype=float)
-
-        return data.set_index(['code', 'date'])['ocf']
+def revenue_growth(revenue: pd.Series) -> pd.Series:
+    """营收增长率（同比）"""
+    return revenue.pct_change(4)  # 假设季频数据
 
 
-class CurrentRatioFactor(FactorBase):
-    """流动比率因子"""
-
-    def __init__(self, **kwargs):
-        super().__init__("current_ratio", "quality", kwargs)
-
-    def calculate(self, data: pd.DataFrame) -> pd.Series:
-        if 'current_ratio' not in data.columns:
-            return pd.Series(dtype=float)
-
-        return data.set_index(['code', 'date'])['current_ratio']
+def earnings_growth(earnings: pd.Series) -> pd.Series:
+    """盈利增长率（同比）"""
+    return earnings.pct_change(4)
 
 
-# ==================== 复合因子 ====================
+def dividend_yield(dividend: pd.Series, price: pd.Series) -> pd.Series:
+    """股息率"""
+    return dividend / price.replace(0, np.nan)
 
-class CompositeFactor(FactorBase):
+
+def earnings_yield(eps: pd.Series, price: pd.Series) -> pd.Series:
+    """盈利收益率 = 1/PE"""
+    return eps / price.replace(0, np.nan)
+
+
+def compute_value_factors(df: pd.DataFrame) -> pd.DataFrame:
     """
-    复合因子 - 将多个因子按权重组合
+    计算价值因子
+
+    Args:
+        df: 包含价格和财务数据的 DataFrame
+            需要列: close, eps, bvps, revenue_per_share, dividend
+
+    Returns:
+        添加了价值因子的 DataFrame
     """
+    df = df.copy()
 
-    def __init__(self, name: str, factors: list, weights: Dict[str, float], **kwargs):
-        super().__init__(name, "composite", kwargs)
-        self.factors = factors
-        self.weights = weights
+    if "eps" in df.columns and "close" in df.columns:
+        df["pe"] = pe_ratio(df["close"], df["eps"])
+        df["earnings_yield"] = earnings_yield(df["eps"], df["close"])
 
-    def calculate(self, data: pd.DataFrame) -> pd.Series:
-        """
-        计算复合因子值（加权平均）
-        """
-        composite_values = None
+    if "bvps" in df.columns and "close" in df.columns:
+        df["pb"] = pb_ratio(df["close"], df["bvps"])
 
-        for factor in self.factors:
-            factor_values = factor.calculate(data)
-            weight = self.weights.get(factor.name, 0)
+    if "revenue_per_share" in df.columns and "close" in df.columns:
+        df["ps"] = ps_ratio(df["close"], df["revenue_per_share"])
 
-            if composite_values is None:
-                composite_values = factor_values * weight
-            else:
-                composite_values = composite_values + factor_values * weight
+    if "dividend" in df.columns and "close" in df.columns:
+        df["dividend_yield"] = dividend_yield(df["dividend"], df["close"])
 
-        return composite_values.dropna()
+    return df
+
+
+def compute_quality_factors(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    计算质量因子
+
+    Args:
+        df: 包含财务数据的 DataFrame
+
+    Returns:
+        添加了质量因子的 DataFrame
+    """
+    df = df.copy()
+
+    if all(col in df.columns for col in ["net_income", "equity"]):
+        df["roe"] = roe(df["net_income"], df["equity"])
+
+    if all(col in df.columns for col in ["net_income", "total_assets"]):
+        df["roa"] = roa(df["net_income"], df["total_assets"])
+
+    if all(col in df.columns for col in ["revenue", "cost"]):
+        df["gross_margin"] = gross_margin(df["revenue"], df["cost"])
+
+    if all(col in df.columns for col in ["net_income", "revenue"]):
+        df["net_margin"] = net_margin(df["net_income"], df["revenue"])
+
+    if all(col in df.columns for col in ["total_liabilities", "total_assets"]):
+        df["debt_ratio"] = debt_ratio(df["total_liabilities"], df["total_assets"])
+
+    return df
+
+
+def compute_growth_factors(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    计算成长因子
+
+    Args:
+        df: 包含财务数据的 DataFrame
+
+    Returns:
+        添加了成长因子的 DataFrame
+    """
+    df = df.copy()
+
+    if "revenue" in df.columns:
+        df["revenue_growth"] = revenue_growth(df["revenue"])
+
+    if "net_income" in df.columns:
+        df["earnings_growth"] = earnings_growth(df["net_income"])
+
+    return df
+
+
+def compute_all_fundamental(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    计算所有基本面因子
+
+    Args:
+        df: 包含价格和财务数据的 DataFrame
+
+    Returns:
+        添加了所有基本面因子的 DataFrame
+    """
+    df = compute_value_factors(df)
+    df = compute_quality_factors(df)
+    df = compute_growth_factors(df)
+
+    log.info(f"计算基本面因子完成，共 {len(df.columns)} 列")
+    return df

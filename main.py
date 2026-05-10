@@ -1,463 +1,236 @@
+#!/usr/bin/env python
 """
-QuantSystem - 多因子量化交易系统
-主入口
+QuantSystem 主入口
+量化交易系统命令行工具
 """
-
 import argparse
-import yaml
+import sys
 from pathlib import Path
 from datetime import datetime, timedelta
 
-import pandas as pd
-import torch
-import torch.utils.data
+# 添加项目根目录到路径
+sys.path.insert(0, str(Path(__file__).parent))
 
-from data.collector import DataCollector
-from data.database import Database, get_database
-from factors import (
-    FactorPreprocessor, FactorEvaluator,
-    MomentumFactor, VolatilityFactor,
-)
-from strategy import MultiFactorStrategy, PortfolioConstructor
-from backtest import BacktestEngine, PerformanceAnalyzer
-from analysis import Visualizer, ReportGenerator
-from utils import log, setup_logger
+from utils.logger import log
+from config.settings import BACKTEST_CONFIG, RISK_CONFIG
 
 
-def run_backtest(config_path: str = None,
-                 start_date: str = None,
-                 end_date: str = None,
-                 initial_cash: float = 1000000):
-    """
-    运行回测流程
-
-    Args:
-        config_path: 配置文件路径
-        start_date: 回测起始日期
-        end_date: 回测结束日期
-        initial_cash: 初始资金
-    """
-    log.info("=" * 50)
-    log.info("多因子量化交易系统 - 启动")
-    log.info("=" * 50)
-
-    # 默认配置
-    if config_path is None:
-        config_path = Path(__file__).parent / "config" / "config.yaml"
-
-    if start_date is None:
-        start_date = (datetime.now() - timedelta(days=365 * 2)).strftime("%Y-%m-%d")
-    if end_date is None:
-        end_date = datetime.now().strftime("%Y-%m-%d")
-
-    log.info(f"回测期间: {start_date} ~ {end_date}")
-    log.info(f"初始资金: {initial_cash:,.2f}")
-
-    # ========== Step 1: 数据采集 ==========
-    log.info("\n--- Step 1: 数据采集 ---")
-    collector = DataCollector(config_path)
-
-    # 获取交易日历
-    log.info("获取交易日历...")
-    trade_calendar = collector.calendar.get_trade_calendar()
-    log.info(f"交易日历: {len(trade_calendar)} 个交易日")
-
-    # 获取股票列表
-    log.info("获取股票列表...")
-    stock_list = collector.stock.get_stock_list()
-    log.info(f"股票数量: {len(stock_list)}")
-
-    # 获取指数数据
-    log.info("获取指数数据(沪深300)...")
-    benchmark_data = collector.stock.get_index_daily(
-        '000300', start_date.replace('-', ''), end_date.replace('-', '')
-    )
-    log.info(f"基准数据: {len(benchmark_data)} 条")
-
-    # 获取成分股数据（示例：沪深300部分成分股）
-    log.info("获取股票行情数据...")
-    sample_codes = stock_list['code'].head(100).tolist()  # 取前100只做演示
-    price_data = collector.stock.get_stock_daily_batch(
-        sample_codes,
-        start_date.replace('-', ''),
-        end_date.replace('-', '')
-    )
-    log.info(f"行情数据: {len(price_data)} 条")
-
-    if price_data.empty:
-        log.error("无法获取行情数据，请检查网络连接")
-        return
-
-    # ========== Step 2: 因子计算 ==========
-    log.info("\n--- Step 2: 因子计算 ---")
-    strategy = MultiFactorStrategy(
-        Path(__file__).parent / "config" / "factors.yaml"
-    )
-
-    factor_data = strategy.calculate_all_factors(price_data)
-    log.info(f"因子计算完成: {len(factor_data)} 条")
-
-    # ========== Step 3: 回测 ==========
-    log.info("\n--- Step 3: 回测 ---")
-    engine = BacktestEngine(
-        initial_cash=initial_cash,
-    )
-    engine.set_data(
-        price_data=price_data,
-        trade_calendar=trade_calendar,
-        benchmark_data=benchmark_data,
-    )
-    engine.set_strategy(
-        strategy=strategy,
-        rebalance_freq='monthly',
-        top_n=30,
-    )
-
-    results = engine.run(start_date, end_date)
-
-    # ========== Step 4: 分析与报告 ==========
-    log.info("\n--- Step 4: 分析与报告 ---")
-    if results:
-        # 绩效分析
-        analyzer = PerformanceAnalyzer()
-        analyzer.print_summary(results['performance'])
-
-        # 可视化
-        viz = Visualizer()
-        if 'nav' in results:
-            nav_fig = viz.plot_nav(results['nav'])
-            viz.save_figure(nav_fig, "reports/nav_curve.png")
-
-            dd_fig = viz.plot_drawdown(results['nav'])
-            viz.save_figure(dd_fig, "reports/drawdown.png")
-
-            ret_fig = viz.plot_returns(results['nav'])
-            viz.save_figure(ret_fig, "reports/returns.png")
-
-        # 生成报告
-        report_gen = ReportGenerator("reports")
-        report_path = report_gen.generate_html(results)
-        log.info(f"报告已生成: {report_path}")
-
-        # 保存摘要
-        summary = report_gen.generate_summary(results)
-        log.info(summary)
-
-    log.info("回测完成!")
-
-
-def run_data_update(config_path: str = None):
-    """
-    更新数据（增量）
-
-    Args:
-        config_path: 配置文件路径
-    """
-    log.info("开始数据更新...")
-
-    collector = DataCollector(config_path)
-    data = collector.initialize_data()
-
-    for key, df in data.items():
-        if not df.empty:
-            log.info(f"{key}: {len(df)} 条数据")
-
-    log.info("数据更新完成")
-
-
-def run_ai_backtest(config_path: str = None,
-                    start_date: str = None,
-                    end_date: str = None,
-                    initial_cash: float = 1000000,
-                    ctm_model: str = None,
-                    mamba_model: str = None,
-                    deepseek_key: str = None):
-    """
-    运行AI增强回测 (CTM + Mamba + DeepSeek反思)
-
-    Args:
-        config_path: 配置文件路径
-        start_date: 回测起始日期
-        end_date: 回测结束日期
-        initial_cash: 初始资金
-        ctm_model: CTM模型路径
-        mamba_model: Mamba模型路径
-        deepseek_key: DeepSeek API密钥
-    """
-    from strategy.ctm_strategy import CTMEnhancedStrategy
+def run_backtest(args):
+    """运行回测"""
+    from data.fetcher import fetcher
+    from data.cleaner import cleaner
+    from backtest.engine import BacktestEngine
+    from backtest.performance import performance_analyzer
+    from analysis.report import report_generator
+    from strategy.momentum import MomentumStrategy, DualMAStrategy
+    from strategy.mean_reversion import MeanReversionStrategy
 
     log.info("=" * 50)
-    log.info("多因子量化交易系统 - AI增强模式")
-    log.info("CTM + Mamba + DeepSeek 反思推理")
+    log.info("开始回测")
     log.info("=" * 50)
 
-    if config_path is None:
-        config_path = Path(__file__).parent / "config" / "config.yaml"
+    # 参数
+    start_date = args.start_date or (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+    end_date = args.end_date or datetime.now().strftime("%Y-%m-%d")
+    initial_capital = args.capital or BACKTEST_CONFIG["initial_capital"]
 
-    if start_date is None:
-        start_date = (datetime.now() - timedelta(days=365 * 2)).strftime("%Y-%m-%d")
-    if end_date is None:
-        end_date = datetime.now().strftime("%Y-%m-%d")
-
-    # ========== Step 1: 初始化AI策略 ==========
-    log.info("\n--- Step 1: 初始化AI策略 ---")
-    strategy = CTMEnhancedStrategy(
-        Path(__file__).parent / "config" / "factors.yaml"
-    )
-
-    # 加载AI模型
-    strategy.load_models(
-        ctm_model_path=ctm_model,
-        mamba_model_path=mamba_model,
-        deepseek_api_key=deepseek_key,
-    )
-
-    log.info(f"CTM: {'启用' if strategy.ctm_enabled else '未启用'}")
-    log.info(f"Mamba: {'启用' if strategy.mamba_enabled else '未启用'}")
-    log.info(f"DeepSeek反思: {'启用' if strategy.reflection_enabled else '未启用'}")
-
-    # ========== Step 2: 数据采集 ==========
-    log.info("\n--- Step 2: 数据采集 ---")
-    collector = DataCollector(config_path)
-
-    trade_calendar = collector.calendar.get_trade_calendar()
-    stock_list = collector.stock.get_stock_list()
-
-    benchmark_data = collector.stock.get_index_daily(
-        '000300', start_date.replace('-', ''), end_date.replace('-', '')
-    )
-
-    sample_codes = stock_list['code'].head(100).tolist()
-    price_data = collector.stock.get_stock_daily_batch(
-        sample_codes,
-        start_date.replace('-', ''),
-        end_date.replace('-', '')
-    )
-
-    if price_data.empty:
-        log.error("无法获取行情数据")
-        return
-
-    # ========== Step 3: 回测 ==========
-    log.info("\n--- Step 3: AI增强回测 ---")
-    engine = BacktestEngine(initial_cash=initial_cash)
-    engine.set_data(
-        price_data=price_data,
-        trade_calendar=trade_calendar,
-        benchmark_data=benchmark_data,
-    )
-
-    # 直接使用CTM增强策略
-    from backtest.engine import BacktestEngine as BE
-    engine._get_target_positions = lambda date: _ai_target_positions(
-        strategy, price_data, None, date
-    )
-
-    results = engine.run(start_date, end_date)
-
-    # ========== Step 4: 分析报告 ==========
-    if results:
-        analyzer = PerformanceAnalyzer()
-        analyzer.print_summary(results['performance'])
-
-        viz = Visualizer()
-        if 'nav' in results:
-            nav_fig = viz.plot_nav(results['nav'], title="AI增强策略净值曲线")
-            viz.save_figure(nav_fig, "reports/ai_nav_curve.png")
-
-        report_gen = ReportGenerator("reports")
-        report_path = report_gen.generate_html(results, strategy_name="CTM_Enhanced")
-        log.info(f"报告已生成: {report_path}")
-
-    log.info("AI增强回测完成!")
-
-
-def _ai_target_positions(strategy, price_data, financial_data, date):
-    """AI策略目标持仓"""
-    try:
-        signals = strategy.generate_signals(
-            price_data, financial_data, date=date
-        )
-        if signals.empty:
-            return {}
-
-        constructor = PortfolioConstructor(max_weight=0.05)
-        return constructor.construct(signals, method='score')
-    except Exception as e:
-        log.error(f"AI策略信号生成失败: {e}")
-        return {}
-
-
-def run_ctm_train(config_path: str = None,
-                  epochs: int = 50,
-                  batch_size: int = 32):
-    """
-    训练CTM因子模型
-
-    Args:
-        config_path: 配置文件路径
-        epochs: 训练轮数
-        batch_size: 批大小
-    """
-    from factors.ctm import CTMTrainer, StockTimeSeriesDataset
-
-    log.info("=" * 50)
-    log.info("CTM模型训练")
-    log.info("=" * 50)
+    log.info(f"回测区间: {start_date} ~ {end_date}")
+    log.info(f"初始资金: {initial_capital:,.0f}")
 
     # 获取数据
-    collector = DataCollector(config_path)
-    stock_list = collector.stock.get_stock_list()
-    sample_codes = stock_list['code'].head(200).tolist()
+    log.info("获取数据...")
+    if args.symbols:
+        symbols = args.symbols.split(",")
+    else:
+        # 默认测试股票池
+        symbols = ["000001", "600000", "000002", "600036", "000333"]
 
-    end_date = datetime.now().strftime("%Y%m%d")
-    start_date = (datetime.now() - timedelta(days=365 * 3)).strftime("%Y%m%d")
+    all_data = fetcher.get_batch_daily_prices(symbols, start_date, end_date)
 
-    price_data = collector.stock.get_stock_daily_batch(
-        sample_codes, start_date, end_date
-    )
-
-    if price_data.empty:
-        log.error("无法获取训练数据")
+    if all_data.empty:
+        log.error("无法获取数据，请检查网络或参数")
         return
 
-    # 构建数据集
-    dataset = StockTimeSeriesDataset(price_data, seq_len=120, min_seq_len=60)
+    # 清洗数据
+    log.info("清洗数据...")
+    all_data = cleaner.clean_prices(all_data)
 
-    # 训练/验证分割
-    n = len(dataset)
-    train_n = int(n * 0.8)
-    train_data = torch.utils.data.Subset(dataset, range(train_n))
-    val_data = torch.utils.data.Subset(dataset, range(train_n, n))
+    # 选择策略
+    strategy_map = {
+        "momentum": MomentumStrategy(lookback_period=20),
+        "dual_ma": DualMAStrategy(fast_period=5, slow_period=20),
+        "mean_reversion": MeanReversionStrategy(window=20),
+    }
 
-    # 训练
-    trainer = CTMTrainer(device='cpu', model_dir="models/ctm")
-    history = trainer.train(
-        train_data=train_data,
-        val_data=val_data,
-        epochs=epochs,
-        batch_size=batch_size,
-    )
+    strategy = strategy_map.get(args.strategy, DualMAStrategy())
+    log.info(f"使用策略: {strategy.name}")
 
-    log.info("CTM模型训练完成!")
+    # 运行回测
+    log.info("运行回测引擎...")
+    engine = BacktestEngine(strategy, initial_capital=initial_capital)
+    results = engine.run(all_data)
 
-
-def run_mamba_train(config_path: str = None,
-                    epochs: int = 30,
-                    batch_size: int = 32):
-    """
-    训练Mamba时序推理模型
-
-    Args:
-        config_path: 配置文件路径
-        epochs: 训练轮数
-        batch_size: 批大小
-    """
-    from factors.mamba import TemporalReasonerTrainer
-    from factors.ctm import StockTimeSeriesDataset
-
-    log.info("=" * 50)
-    log.info("Mamba时序推理器训练")
-    log.info("=" * 50)
-
-    collector = DataCollector(config_path)
-    stock_list = collector.stock.get_stock_list()
-    sample_codes = stock_list['code'].head(200).tolist()
-
-    end_date = datetime.now().strftime("%Y%m%d")
-    start_date = (datetime.now() - timedelta(days=365 * 3)).strftime("%Y%m%d")
-
-    price_data = collector.stock.get_stock_daily_batch(
-        sample_codes, start_date, end_date
-    )
-
-    if price_data.empty:
-        log.error("无法获取训练数据")
+    if not results:
+        log.error("回测失败")
         return
 
-    dataset = StockTimeSeriesDataset(price_data, seq_len=120)
+    # 打印结果
+    print("\n" + "=" * 50)
+    print("回测结果")
+    print("=" * 50)
+    print(f"总收益率: {results['total_return']:.2%}")
+    print(f"年化收益: {results['annual_return']:.2%}")
+    print(f"年化波动: {results['annual_volatility']:.2%}")
+    print(f"最大回撤: {results['max_drawdown']:.2%}")
+    print(f"夏普比率: {results['sharpe_ratio']:.2f}")
+    print(f"总交易次数: {results['total_trades']}")
+    print(f"胜率: {results['win_rate']:.2%}")
+    print(f"总佣金: {results['total_commission']:.2f}")
+    print("=" * 50 + "\n")
 
-    trainer = TemporalReasonerTrainer(device='cpu', model_dir="models/mamba")
-    trainer.train(dataset, epochs=epochs, batch_size=batch_size)
+    # 生成报告
+    if args.report:
+        log.info("生成报告...")
+        report_path = report_generator.generate(
+            results,
+            strategy_name=strategy.name,
+            save_html=True,
+            save_csv=True,
+        )
+        log.info(f"报告已保存: {report_path}")
 
-    log.info("Mamba模型训练完成!")
+    return results
 
 
-def run_rl_train(config_path: str = None,
-                 total_timesteps: int = 50000):
-    """
-    训练RL反思策略
+def run_fetch_data(args):
+    """获取数据"""
+    from data.fetcher import fetcher
+    from data.storage import storage
 
-    Args:
-        config_path: 配置文件路径
-        total_timesteps: 总训练步数
-    """
-    from factors.rl import TradingEnv, RLReflectiveTrainer
+    log.info("获取数据...")
 
-    log.info("=" * 50)
-    log.info("RL反思策略训练")
-    log.info("=" * 50)
+    start_date = args.start_date or "2023-01-01"
+    end_date = args.end_date or datetime.now().strftime("%Y-%m-%d")
 
-    collector = DataCollector(config_path)
-    stock_list = collector.stock.get_stock_list()
+    if args.symbols:
+        symbols = args.symbols.split(",")
+    else:
+        # 获取股票列表
+        stock_list = fetcher.get_stock_list()
+        symbols = stock_list["symbol"].tolist()[:100]  # 默认取前100只
 
-    end_date = datetime.now().strftime("%Y%m%d")
-    start_date = (datetime.now() - timedelta(days=365 * 2)).strftime("%Y%m%d")
+    log.info(f"获取 {len(symbols)} 只股票数据...")
 
-    benchmark_data = collector.stock.get_index_daily('000300', start_date, end_date)
-    price_data = collector.stock.get_stock_daily_batch(
-        stock_list['code'].head(100).tolist(), start_date, end_date
-    )
+    data = fetcher.get_batch_daily_prices(symbols, start_date, end_date)
 
-    if price_data.empty:
-        log.error("无法获取训练数据")
-        return
+    if not data.empty:
+        storage.save_daily_prices(data)
+        log.info(f"数据已保存，共 {len(data)} 条记录")
+    else:
+        log.warning("未获取到数据")
 
-    env = TradingEnv(price_data, benchmark_data, lookback_window=60)
 
-    trainer = RLReflectiveTrainer(env, model_dir="models/rl", device="cpu")
-    trainer.train(total_timesteps=total_timesteps)
+def run_paper_trading(args):
+    """纸面交易"""
+    from execution.simulator import PaperTrading
+    from strategy.momentum import DualMAStrategy
 
-    results = trainer.evaluate(n_episodes=5)
-    log.info(f"评估结果: {results}")
+    log.info("启动纸面交易...")
 
-    log.info("RL策略训练完成!")
+    strategy = DualMAStrategy()
+    paper = PaperTrading(strategy)
+
+    log.info("纸面交易已启动（模拟模式）")
+    log.info("按 Ctrl+C 停止")
+
+    # 这里可以添加实时数据订阅逻辑
+    print(f"初始资金: {paper.simulator.get_cash():,.0f}")
+    print(f"当前状态: {paper.get_status()}")
+
+
+def show_status(args):
+    """显示系统状态"""
+    from data.storage import storage
+
+    print("\n" + "=" * 50)
+    print("QuantSystem 状态")
+    print("=" * 50)
+
+    # 数据状态
+    status = storage.get_data_status()
+    print(f"股票数量: {status.get('stock_count', 0)}")
+    print(f"数据条数: {status.get('record_count', 0)}")
+    print(f"日期范围: {status.get('date_range', ('N/A', 'N/A'))}")
+
+    # 配置
+    print(f"\n回测配置:")
+    print(f"  初始资金: {BACKTEST_CONFIG['initial_capital']:,.0f}")
+    print(f"  佣金率: {BACKTEST_CONFIG['commission_rate']:.4%}")
+    print(f"  滑点率: {BACKTEST_CONFIG['slippage_rate']:.4%}")
+
+    print(f"\n风控配置:")
+    print(f"  单只最大仓位: {RISK_CONFIG['max_position_pct']:.1%}")
+    print(f"  最大回撤熔断: {RISK_CONFIG['max_drawdown_stop']:.1%}")
+
+    print("=" * 50 + "\n")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="多因子量化交易系统")
-    parser.add_argument('command',
-                       choices=['backtest', 'ai_backtest', 'update', 'factor_test',
-                               'train_ctm', 'train_mamba', 'train_rl'],
-                       help='命令: backtest(传统回测) / ai_backtest(AI增强回测) / '
-                            'update(更新数据) / train_ctm(训练CTM) / '
-                            'train_mamba(训练Mamba) / train_rl(训练RL)')
-    parser.add_argument('--start', type=str, help='开始日期 YYYY-MM-DD')
-    parser.add_argument('--end', type=str, help='结束日期 YYYY-MM-DD')
-    parser.add_argument('--cash', type=float, default=1000000, help='初始资金')
-    parser.add_argument('--config', type=str, help='配置文件路径')
-    parser.add_argument('--ctm-model', type=str, help='CTM模型路径')
-    parser.add_argument('--mamba-model', type=str, help='Mamba模型路径')
-    parser.add_argument('--deepseek-key', type=str, help='DeepSeek API密钥')
-    parser.add_argument('--epochs', type=int, default=50, help='训练轮数')
-    parser.add_argument('--timesteps', type=int, default=50000, help='RL训练步数')
+    """主函数"""
+    parser = argparse.ArgumentParser(
+        description="QuantSystem - 量化交易系统",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+示例:
+  # 运行回测
+  python main.py backtest --symbols 000001,600000 --start-date 2023-01-01
+
+  # 获取数据
+  python main.py fetch --symbols 000001,600000 --start-date 2023-01-01
+
+  # 查看状态
+  python main.py status
+        """
+    )
+
+    subparsers = parser.add_subparsers(dest="command", help="可用命令")
+
+    # 回测命令
+    backtest_parser = subparsers.add_parser("backtest", help="运行回测")
+    backtest_parser.add_argument("--symbols", type=str, help="股票代码，逗号分隔")
+    backtest_parser.add_argument("--start-date", type=str, help="开始日期 YYYY-MM-DD")
+    backtest_parser.add_argument("--end-date", type=str, help="结束日期 YYYY-MM-DD")
+    backtest_parser.add_argument("--capital", type=float, help="初始资金")
+    backtest_parser.add_argument("--strategy", type=str, default="dual_ma",
+                                  choices=["momentum", "dual_ma", "mean_reversion"],
+                                  help="策略类型")
+    backtest_parser.add_argument("--report", action="store_true", help="生成报告")
+
+    # 数据获取命令
+    fetch_parser = subparsers.add_parser("fetch", help="获取数据")
+    fetch_parser.add_argument("--symbols", type=str, help="股票代码，逗号分隔")
+    fetch_parser.add_argument("--start-date", type=str, help="开始日期")
+    fetch_parser.add_argument("--end-date", type=str, help="结束日期")
+
+    # 纸面交易命令
+    paper_parser = subparsers.add_parser("paper", help="纸面交易")
+
+    # 状态命令
+    status_parser = subparsers.add_parser("status", help="显示系统状态")
 
     args = parser.parse_args()
 
-    if args.command == 'backtest':
-        run_backtest(args.config, args.start, args.end, args.cash)
-    elif args.command == 'ai_backtest':
-        run_ai_backtest(args.config, args.start, args.end, args.cash,
-                       args.ctm_model, args.mamba_model, args.deepseek_key)
-    elif args.command == 'update':
-        run_data_update(args.config)
-    elif args.command == 'train_ctm':
-        run_ctm_train(args.config, args.epochs)
-    elif args.command == 'train_mamba':
-        run_mamba_train(args.config, args.epochs)
-    elif args.command == 'train_rl':
-        run_rl_train(args.config, args.timesteps)
+    if args.command == "backtest":
+        run_backtest(args)
+    elif args.command == "fetch":
+        run_fetch_data(args)
+    elif args.command == "paper":
+        run_paper_trading(args)
+    elif args.command == "status":
+        show_status(args)
+    else:
+        parser.print_help()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -1,189 +1,228 @@
 """
 通用工具函数
 """
-
 import pandas as pd
 import numpy as np
-from typing import Union, List, Optional
 from datetime import datetime, timedelta
+from typing import Union, List, Optional
 
 
-def format_code(code: str) -> str:
+def date_range(start_date: str, end_date: str) -> List[str]:
     """
-    格式化股票代码
-    - 6位股票代码补齐
-    - 添加交易所后缀(.SH/.SZ)
+    生成日期范围列表（仅交易日）
 
     Args:
-        code: 股票代码
+        start_date: 开始日期 YYYY-MM-DD
+        end_date: 结束日期 YYYY-MM-DD
 
     Returns:
-        格式化后的代码，如 '000001.SZ'
+        日期字符串列表
     """
-    code = str(code).zfill(6)
+    dates = pd.date_range(start_date, end_date, freq="B")  # B = 工作日
+    return [d.strftime("%Y-%m-%d") for d in dates]
 
-    # 判断交易所
-    if code.startswith(('000', '001', '002', '003', '300')):
-        return f"{code}.SZ"  # 深圳
+
+def trading_days(start_date: str, end_date: str) -> int:
+    """
+    计算交易日数量
+
+    Args:
+        start_date: 开始日期
+        end_date: 结束日期
+
+    Returns:
+        交易日数量
+    """
+    return len(date_range(start_date, end_date))
+
+
+def format_number(value: float, decimal: int = 2) -> str:
+    """
+    格式化数字显示（添加单位）
+
+    Args:
+        value: 数值
+        decimal: 小数位数
+
+    Returns:
+        格式化后的字符串
+    """
+    abs_value = abs(value)
+    sign = "-" if value < 0 else ""
+
+    if abs_value >= 1e8:
+        return f"{sign}{abs_value / 1e8:.{decimal}f}亿"
+    elif abs_value >= 1e4:
+        return f"{sign}{abs_value / 1e4:.{decimal}f}万"
     else:
-        return f"{code}.SH"  # 上海
+        return f"{sign}{abs_value:.{decimal}f}"
 
 
-def parse_code(full_code: str) -> tuple:
+def pct_change(current: float, previous: float) -> float:
     """
-    解析完整股票代码
+    计算百分比变化
 
     Args:
-        full_code: 如 '000001.SZ'
+        current: 当前值
+        previous: 之前值
 
     Returns:
-        (code, exchange) -> ('000001', 'SZ')
+        百分比变化
     """
-    if '.' in full_code:
-        code, exchange = full_code.split('.')
-        return code, exchange
-    return full_code, ''
+    if previous == 0:
+        return 0.0
+    return (current - previous) / abs(previous)
 
 
-def trading_date_offset(date: Union[str, datetime], offset: int,
-                       trade_calendar: pd.DataFrame = None) -> str:
+def annualized_return(total_return: float, days: int) -> float:
     """
-    计算交易日偏移
+    计算年化收益率
 
     Args:
-        date: 起始日期，格式YYYY-MM-DD或datetime
-        offset: 偏移天数，正数往后，负数往前
-        trade_calendar: 交易日期表DataFrame，需包含date列
+        total_return: 总收益率
+        days: 持有天数
 
     Returns:
-        偏移后的交易日，格式YYYY-MM-DD
+        年化收益率
     """
-    if isinstance(date, str):
-        date = pd.to_datetime(date)
-
-    if trade_calendar is not None and len(trade_calendar) > 0:
-        dates = pd.to_datetime(trade_calendar['date']).sort_values().values
-        current_idx = np.searchsorted(dates, date)
-
-        new_idx = current_idx + offset
-        new_idx = np.clip(new_idx, 0, len(dates) - 1)
-
-        result = pd.Timestamp(dates[new_idx])
-    else:
-        # 简单估计：每年约250个交易日
-        result = date + timedelta(days=offset)
-
-    return result.strftime('%Y-%m-%d')
+    if days <= 0:
+        return 0.0
+    return (1 + total_return) ** (252 / days) - 1
 
 
-def get_date_range(start: str, end: str) -> List[str]:
+def annualized_volatility(returns: pd.Series) -> float:
     """
-    生成日期序列
+    计算年化波动率
 
     Args:
-        start: 起始日期 YYYY-MM-DD
-        end: 结束日期 YYYY-MM-DD
+        returns: 日收益率序列
 
     Returns:
-        日期列表
+        年化波动率
     """
-    return pd.date_range(start, end, freq='D').strftime('%Y-%m-%d').tolist()
+    return returns.std() * np.sqrt(252)
 
 
-def resample_turnover(date: str, trade_calendar: pd.DataFrame) -> str:
+def sharpe_ratio(returns: pd.Series, risk_free_rate: float = 0.03) -> float:
     """
-    获取调仓日（按月/周对齐到最近交易日）
+    计算夏普比率
 
     Args:
-        date: 目标日期
-        trade_calendar: 交易日期表
+        returns: 日收益率序列
+        risk_free_rate: 无风险利率（年化）
 
     Returns:
-        最近的有效交易日
+        夏普比率
     """
-    target = pd.to_datetime(date)
-    dates = pd.to_datetime(trade_calendar['date']).sort_values()
-
-    # 找最近的不早于target的交易日
-    valid_dates = dates[dates >= target]
-    if len(valid_dates) > 0:
-        return valid_dates.iloc[0].strftime('%Y-%m-%d')
-
-    # 如果target之后没有，取前一个
-    return dates[dates <= target].iloc[-1].strftime('%Y-%m-%d')
+    excess_returns = returns.mean() * 252 - risk_free_rate
+    vol = annualized_volatility(returns)
+    if vol == 0:
+        return 0.0
+    return excess_returns / vol
 
 
-def nan_to_zero(df: Union[pd.DataFrame, pd.Series], copy: bool = False) -> Union[pd.DataFrame, pd.Series]:
+def max_drawdown(nav_series: pd.Series) -> float:
     """
-    将NaN替换为0
+    计算最大回撤
 
     Args:
-        df: 输入数据
-        copy: 是否返回副本
+        nav_series: 净值序列
 
     Returns:
-        处理后的数据
+        最大回撤
     """
-    if copy:
-        return df.fillna(0)
-    return df.fillna(0)
+    cumulative = nav_series.cummax()
+    drawdown = (nav_series - cumulative) / cumulative
+    return drawdown.min()
 
 
-def winsorize(series: pd.Series, n_std: float = 3.0) -> pd.Series:
+def calmar_ratio(annual_return: float, max_dd: float) -> float:
     """
-    MAD去极值方法
+    计算 Calmar 比率
 
     Args:
-        series: 输入序列
-        n_std: 标准差倍数，默认3倍
+        annual_return: 年化收益
+        max_dd: 最大回撤（正数）
 
     Returns:
-        去极值后的序列
+        Calmar 比率
     """
-    median = series.median()
-    mad = (series - median).abs().median()
-    if mad == 0:
-        return series
-
-    lower = median - n_std * mad
-    upper = median + n_std * mad
-    return series.clip(lower, upper)
+    if max_dd == 0:
+        return float('inf')
+    return annual_return / abs(max_dd)
 
 
-def standardize(series: pd.Series, method: str = 'zscore') -> pd.Series:
+def winsorize(series: pd.Series, limits: tuple = (0.01, 0.01)) -> pd.Series:
     """
-    标准化序列
+    缩尾处理（去除极端值）
 
     Args:
-        series: 输入序列
-        method: 'zscore' 或 'minmax'
+        series: 数据序列
+        limits: 上下限比例
+
+    Returns:
+    处理后的序列
+    """
+    lower_limit = series.quantile(limits[0])
+    upper_limit = series.quantile(1 - limits[1])
+    return series.clip(lower_limit, upper_limit)
+
+
+def normalize(series: pd.Series, method: str = "zscore") -> pd.Series:
+    """
+    标准化处理
+
+    Args:
+        series: 数据序列
+        method: 标准化方法 (zscore / minmax / rank)
 
     Returns:
         标准化后的序列
     """
-    if method == 'zscore':
-        mean = series.mean()
-        std = series.std()
-        if std == 0:
-            return series - mean
-        return (series - mean) / std
-    elif method == 'minmax':
-        min_val = series.min()
-        max_val = series.max()
-        if max_val == min_val:
-            return series - min_val
-        return (series - min_val) / (max_val - min_val)
-    return series
+    if method == "zscore":
+        return (series - series.mean()) / series.std()
+    elif method == "minmax":
+        return (series - series.min()) / (series.max() - series.min())
+    elif method == "rank":
+        return series.rank(pct=True)
+    else:
+        return series
 
 
-def rank_normalize(series: pd.Series) -> pd.Series:
+def get_industry_mapping() -> dict:
     """
-    排名归一化到[0,1]
-
-    Args:
-        series: 输入序列
+    获取申万一级行业映射
 
     Returns:
-        归一化后的序列
+        行业代码到名称的映射
     """
-    return series.rank(pct=True)
+    return {
+        "801010": "农林牧渔",
+        "801020": "采掘",
+        "801030": "化工",
+        "801040": "钢铁",
+        "801050": "有色金属",
+        "801080": "电子",
+        "801110": "家用电器",
+        "801120": "食品饮料",
+        "801130": "纺织服装",
+        "801140": "轻工制造",
+        "801150": "医药生物",
+        "801160": "公用事业",
+        "801170": "交通运输",
+        "801180": "房地产",
+        "801200": "商业贸易",
+        "801210": "休闲服务",
+        "801230": "综合",
+        "801710": "建筑材料",
+        "801720": "建筑装饰",
+        "801730": "电气设备",
+        "801740": "国防军工",
+        "801750": "计算机",
+        "801760": "传媒",
+        "801770": "通信",
+        "801780": "银行",
+        "801790": "非银金融",
+        "801880": "汽车",
+        "801890": "机械设备",
+    }

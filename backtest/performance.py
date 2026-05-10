@@ -1,333 +1,226 @@
 """
 绩效分析模块
 """
-
 import pandas as pd
 import numpy as np
 from typing import Dict, Optional
+from utils.logger import log
+from utils.helpers import sharpe_ratio, max_drawdown, annualized_return, annualized_volatility
 
 
 class PerformanceAnalyzer:
-    """
-    绩效分析器
-
-    计算各类绩效指标:
-    - 收益指标: 累计收益、年化收益
-    - 风险指标: 最大回撤、波动率
-    - 风险调整收益: Sharpe、Sortino、Calmar
-    - 相对指标: Alpha、Beta、跟踪误差、信息比率
-    """
+    """绩效分析器"""
 
     def __init__(self, risk_free_rate: float = 0.03):
-        """
-        Args:
-            risk_free_rate: 无风险利率（年化）
-        """
         self.risk_free_rate = risk_free_rate
 
-    def calculate_returns(self, nav_df: pd.DataFrame) -> pd.Series:
+    def analyze(self, nav_series: pd.Series, benchmark: Optional[pd.Series] = None) -> Dict:
         """
-        计算日收益率
+        分析绩效
 
         Args:
-            nav_df: 净值DataFrame，需包含 date, nav 列
-
-        Returns:
-            日收益率Series
-        """
-        nav_df = nav_df.sort_values('date')
-        returns = nav_df['nav'].pct_change()
-        return returns.dropna()
-
-    def annualized_return(self, total_return: float, days: int) -> float:
-        """
-        计算年化收益率
-
-        Args:
-            total_return: 累计收益率
-            days: 交易日天数
-
-        Returns:
-            年化收益率
-        """
-        if days <= 0:
-            return 0
-        years = days / 252
-        if years <= 0:
-            return 0
-        return (1 + total_return) ** (1 / years) - 1
-
-    def max_drawdown(self, nav_df: pd.DataFrame) -> tuple:
-        """
-        计算最大回撤
-
-        Args:
-            nav_df: 净值DataFrame
-
-        Returns:
-            (max_drawdown, max_drawdown_pct, peak_date, trough_date)
-        """
-        nav = nav_df['nav'].values
-        dates = nav_df['date'].values
-
-        peak = np.maximum.accumulate(nav)
-        drawdown = (nav - peak) / peak
-
-        max_dd = drawdown.min()
-        max_dd_idx = drawdown.argmin()
-        max_dd_date = dates[max_dd_idx]
-
-        # 找峰值
-        peak_idx = nav[:max_dd_idx + 1].argmax()
-        peak_date = dates[peak_idx]
-        peak_value = nav[peak_idx]
-
-        return abs(max_dd), abs(max_dd) / peak_value if peak_value > 0 else 0, peak_date, max_dd_date
-
-    def sharpe_ratio(self, returns: pd.Series, periods_per_year: int = 252) -> float:
-        """
-        计算Sharpe比率
-
-        Args:
-            returns: 收益率序列
-            periods_per_year: 年化周期数（252交易日）
-
-        Returns:
-            Sharpe比率
-        """
-        if len(returns) < 2:
-            return 0
-
-        mean_return = returns.mean()
-        std_return = returns.std()
-
-        if std_return == 0:
-            return 0
-
-        excess_return = mean_return - self.risk_free_rate / periods_per_year
-        return excess_return / std_return * np.sqrt(periods_per_year)
-
-    def sortino_ratio(self, returns: pd.Series, periods_per_year: int = 252) -> float:
-        """
-        计算Sortino比率
-
-        Args:
-            returns: 收益率序列
-            periods_per_year: 年化周期数
-
-        Returns:
-            Sortino比率
-        """
-        if len(returns) < 2:
-            return 0
-
-        mean_return = returns.mean()
-        downside_returns = returns[returns < 0]
-
-        if len(downside_returns) == 0 or downside_returns.std() == 0:
-            return 0
-
-        excess_return = mean_return - self.risk_free_rate / periods_per_year
-        downside_std = downside_returns.std()
-
-        return excess_return / downside_std * np.sqrt(periods_per_year)
-
-    def calmar_ratio(self, annual_return: float, max_drawdown: float) -> float:
-        """
-        计算Calmar比率
-
-        Args:
-            annual_return: 年化收益率
-            max_drawdown: 最大回撤
-
-        Returns:
-            Calmar比率
-        """
-        if max_drawdown == 0:
-            return 0
-        return annual_return / max_drawdown
-
-    def alpha_beta(self, portfolio_returns: pd.Series,
-                   benchmark_returns: pd.Series) -> tuple:
-        """
-        计算Alpha和Beta
-
-        使用回归: Rp = alpha + beta * Rb + epsilon
-
-        Args:
-            portfolio_returns: 组合收益率
-            benchmark_returns: 基准收益率
-
-        Returns:
-            (alpha, beta)
-        """
-        # 对齐
-        aligned = pd.DataFrame({
-            'portfolio': portfolio_returns,
-            'benchmark': benchmark_returns
-        }).dropna()
-
-        if len(aligned) < 10:
-            return 0, 1
-
-        p_returns = aligned['portfolio'].values
-        b_returns = aligned['benchmark'].values
-
-        # OLS回归
-        X = np.column_stack([np.ones(len(b_returns)), b_returns])
-        beta = np.linalg.lstsq(X, p_returns, rcond=None)[0]
-
-        alpha = beta[0] * 252  # 年化alpha
-        beta_value = beta[1]
-
-        return alpha, beta_value
-
-    def turnover(self, trades_df: pd.DataFrame, nav_df: pd.DataFrame) -> float:
-        """
-        计算换手率
-
-        Args:
-            trades_df: 交易记录
-            nav_df: 净值记录
-
-        Returns:
-            平均换手率
-        """
-        if trades_df.empty or nav_df.empty:
-            return 0
-
-        # 按日期统计交易金额
-        trades_df = trades_df.copy()
-        trades_df['trade_value'] = trades_df['price'] * trades_df['quantity']
-
-        daily_turnover = []
-        nav_values = nav_df.set_index('date')['total_value']
-
-        for date in trades_df['date'].unique():
-            day_trades = trades_df[trades_df['date'] == date]
-            trade_value = day_trades['trade_value'].sum()
-
-            if date in nav_values.index:
-                nav_value = nav_values.loc[date]
-                if nav_value > 0:
-                    daily_turnover.append(trade_value / nav_value)
-
-        return np.mean(daily_turnover) if daily_turnover else 0
-
-    def analyze(self, nav_df: pd.DataFrame, initial_cash: float) -> Dict:
-        """
-        综合绩效分析
-
-        Args:
-            nav_df: 净值DataFrame
-            initial_cash: 初始资金
+            nav_series: 净值序列
+            benchmark: 基准净值序列
 
         Returns:
             绩效指标字典
         """
-        nav_df = nav_df.sort_values('date').reset_index(drop=True)
+        if nav_series.empty:
+            return {}
 
-        # 基本信息
-        days = len(nav_df)
-        total_value = nav_df['nav'].iloc[-1] * initial_cash
-        total_return = nav_df['nav'].iloc[-1] - 1
+        returns = nav_series.pct_change().dropna()
 
-        # 收益率序列
-        returns = self.calculate_returns(nav_df)
+        metrics = {
+            # 收益指标
+            "total_return": nav_series.iloc[-1] / nav_series.iloc[0] - 1,
+            "annual_return": annualized_return(
+                nav_series.iloc[-1] / nav_series.iloc[0] - 1,
+                len(nav_series)
+            ),
+            "monthly_return": returns.mean() * 21,
+            "daily_return": returns.mean(),
 
-        # 年化收益
-        annual_return = self.annualized_return(total_return, days)
+            # 风险指标
+            "annual_volatility": annualized_volatility(returns),
+            "max_drawdown": max_drawdown(nav_series),
+            "downside_volatility": self._downside_volatility(returns),
+            "var_95": returns.quantile(0.05),
+            "cvar_95": returns[returns <= returns.quantile(0.05)].mean(),
 
-        # 最大回撤
-        max_dd, max_dd_pct, peak_date, trough_date = self.max_drawdown(nav_df)
+            # 风险调整收益
+            "sharpe_ratio": sharpe_ratio(returns, self.risk_free_rate),
+            "sortino_ratio": self._sortino_ratio(returns),
+            "calmar_ratio": self._calmar_ratio(nav_series),
+            "information_ratio": 0,
 
-        # 夏普比率
-        sharpe = self.sharpe_ratio(returns)
-
-        # 索提诺比率
-        sortino = self.sortino_ratio(returns)
-
-        # 卡玛比率
-        calmar = self.calmar_ratio(annual_return, max_dd_pct)
-
-        # Alpha/Beta（如果有基准）
-        alpha, beta = 0, 1
-        if 'benchmark_nav' in nav_df.columns:
-            bench_returns = nav_df['benchmark_nav'].pct_change().dropna()
-            aligned_portfolio = returns.iloc[:len(bench_returns)]
-            alpha, beta = self.alpha_beta(aligned_portfolio, bench_returns)
-
-        # 收益波动率
-        volatility = returns.std() * np.sqrt(252)
-
-        # 胜率
-        win_rate = (returns > 0).mean()
-
-        return {
-            'basic': {
-                'start_date': str(nav_df['date'].iloc[0])[:10],
-                'end_date': str(nav_df['date'].iloc[-1])[:10],
-                'days': days,
-                'initial_cash': initial_cash,
-                'final_value': total_value,
-                'total_return': total_return,
-                'total_return_pct': total_return * 100,
-                'annual_return': annual_return,
-                'annual_return_pct': annual_return * 100,
-            },
-            'risk': {
-                'max_drawdown': max_dd_pct,
-                'max_drawdown_pct': max_dd_pct * 100,
-                'volatility': volatility,
-                'volatility_pct': volatility * 100,
-                'peak_date': str(peak_date)[:10] if peak_date else '',
-                'trough_date': str(trough_date)[:10] if trough_date else '',
-            },
-            'risk_adjusted': {
-                'sharpe_ratio': sharpe,
-                'sortino_ratio': sortino,
-                'calmar_ratio': calmar,
-            },
-            'relative': {
-                'alpha': alpha,
-                'beta': beta,
-            },
-            'trading': {
-                'win_rate': win_rate,
-                'win_rate_pct': win_rate * 100,
-                'avg_return': returns.mean(),
-                'avg_return_pct': returns.mean() * 100,
-            }
+            # 分布特征
+            "skewness": returns.skew(),
+            "kurtosis": returns.kurtosis(),
+            "best_day": returns.max(),
+            "worst_day": returns.min(),
+            "positive_days": (returns > 0).sum() / len(returns),
         }
 
-    def print_summary(self, results: Dict) -> None:
-        """
-        打印绩效摘要
-        """
-        basic = results['basic']
-        risk = results['risk']
-        risk_adj = results['risk_adjusted']
-        rel = results['relative']
-        trading = results['trading']
+        # 相对基准
+        if benchmark is not None and not benchmark.empty:
+            benchmark_returns = benchmark.pct_change().dropna()
+            aligned_returns, aligned_benchmark = returns.align(benchmark_returns, join="inner")
 
-        print("\n" + "=" * 50)
-        print("回测绩效摘要")
-        print("=" * 50)
-        print(f"回测期间: {basic['start_date']} ~ {basic['end_date']} ({basic['days']}天)")
-        print(f"初始资金: {basic['initial_cash']:,.2f}")
-        print(f"最终市值: {basic['final_value']:,.2f}")
-        print(f"总收益率: {basic['total_return_pct']:.2f}%")
-        print(f"年化收益率: {basic['annual_return_pct']:.2f}%")
-        print()
-        print(f"最大回撤: {risk['max_drawdown_pct']:.2f}%")
-        print(f"年化波动率: {risk['volatility_pct']:.2f}%")
-        print()
-        print(f"Sharpe比率: {risk_adj['sharpe_ratio']:.3f}")
-        print(f"Sortino比率: {risk_adj['sortino_ratio']:.3f}")
-        print(f"Calmar比率: {risk_adj['calmar_ratio']:.3f}")
-        print()
-        print(f"Alpha: {rel['alpha']:.4f}")
-        print(f"Beta: {rel['beta']:.4f}")
-        print()
-        print(f"胜率: {trading['win_rate_pct']:.2f}%")
-        print("=" * 50)
+            if len(aligned_returns) > 0:
+                excess = aligned_returns - aligned_benchmark
+                metrics["excess_return"] = excess.mean() * 252
+                metrics["tracking_error"] = excess.std() * np.sqrt(252)
+                metrics["information_ratio"] = (
+                    excess.mean() * 252 / (excess.std() * np.sqrt(252))
+                    if excess.std() > 0 else 0
+                )
+                metrics["beta"] = self._calculate_beta(aligned_returns, aligned_benchmark)
+                metrics["alpha"] = self._calculate_alpha(
+                    aligned_returns, aligned_benchmark, self.risk_free_rate
+                )
+
+        return metrics
+
+    def _downside_volatility(self, returns: pd.Series, target: float = 0) -> float:
+        """下行波动率"""
+        downside = returns[returns < target]
+        if downside.empty:
+            return 0
+        return downside.std() * np.sqrt(252)
+
+    def _sortino_ratio(self, returns: pd.Series) -> float:
+        """Sortino 比率"""
+        excess = returns.mean() * 252 - self.risk_free_rate
+        downside_vol = self._downside_volatility(returns)
+        if downside_vol == 0:
+            return 0
+        return excess / downside_vol
+
+    def _calmar_ratio(self, nav_series: pd.Series) -> float:
+        """Calmar 比率"""
+        annual_ret = annualized_return(
+            nav_series.iloc[-1] / nav_series.iloc[0] - 1,
+            len(nav_series)
+        )
+        max_dd = abs(max_drawdown(nav_series))
+        if max_dd == 0:
+            return 0
+        return annual_ret / max_dd
+
+    def _calculate_beta(self, returns: pd.Series, benchmark: pd.Series) -> float:
+        """计算 Beta"""
+        covariance = returns.cov(benchmark)
+        variance = benchmark.var()
+        if variance == 0:
+            return 0
+        return covariance / variance
+
+    def _calculate_alpha(
+        self,
+        returns: pd.Series,
+        benchmark: pd.Series,
+        rf: float
+    ) -> float:
+        """计算 Alpha"""
+        beta = self._calculate_beta(returns, benchmark)
+        excess_return = returns.mean() * 252 - rf
+        benchmark_excess = benchmark.mean() * 252 - rf
+        return excess_return - beta * benchmark_excess
+
+    def analyze_trades(self, trades_df: pd.DataFrame) -> Dict:
+        """
+        分析交易记录
+
+        Args:
+            trades_df: 交易记录 DataFrame
+
+        Returns:
+            交易分析指标
+        """
+        if trades_df.empty:
+            return {}
+
+        # 基本统计
+        total_trades = len(trades_df)
+        buy_trades = trades_df[trades_df["side"] == "BUY"]
+        sell_trades = trades_df[trades_df["side"] == "SELL"]
+
+        # 盈亏分析
+        pnls = trades_df[trades_df["pnl"] != 0]["pnl"]
+        winning = pnls[pnls > 0]
+        losing = pnls[pnls < 0]
+
+        metrics = {
+            "total_trades": total_trades,
+            "buy_count": len(buy_trades),
+            "sell_count": len(sell_trades),
+            "total_pnl": pnls.sum() if len(pnls) > 0 else 0,
+            "avg_pnl": pnls.mean() if len(pnls) > 0 else 0,
+            "winning_trades": len(winning),
+            "losing_trades": len(losing),
+            "win_rate": len(winning) / len(pnls) if len(pnls) > 0 else 0,
+            "avg_win": winning.mean() if len(winning) > 0 else 0,
+            "avg_loss": losing.mean() if len(losing) > 0 else 0,
+            "profit_factor": abs(winning.sum() / losing.sum()) if len(losing) > 0 and losing.sum() != 0 else float('inf'),
+            "max_win": winning.max() if len(winning) > 0 else 0,
+            "max_loss": losing.min() if len(losing) > 0 else 0,
+            "total_commission": trades_df["commission"].sum(),
+            "avg_commission": trades_df["commission"].mean(),
+        }
+
+        # 期望值
+        if len(pnls) > 0:
+            metrics["expectancy"] = (
+                metrics["win_rate"] * metrics["avg_win"] +
+                (1 - metrics["win_rate"]) * metrics["avg_loss"]
+            )
+
+        return metrics
+
+    def monthly_returns(self, nav_series: pd.Series) -> pd.DataFrame:
+        """
+        计算月度收益
+
+        Args:
+            nav_series: 净值序列
+
+        Returns:
+            月度收益 DataFrame
+        """
+        if nav_series.empty:
+            return pd.DataFrame()
+
+        monthly = nav_series.resample("M").last()
+        monthly_returns = monthly.pct_change().dropna()
+
+        # 构建月度收益表
+        df = pd.DataFrame({
+            "year": monthly_returns.index.year,
+            "month": monthly_returns.index.month,
+            "return": monthly_returns.values,
+        })
+
+        # 透视表
+        pivot = df.pivot(index="year", columns="month", values="return")
+        pivot.columns = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+        return pivot
+
+    def rolling_sharpe(self, nav_series: pd.Series, window: int = 60) -> pd.Series:
+        """滚动夏普比率"""
+        returns = nav_series.pct_change()
+        rolling_return = returns.rolling(window).mean() * 252
+        rolling_vol = returns.rolling(window).std() * np.sqrt(252)
+
+        return (rolling_return - self.risk_free_rate) / rolling_vol
+
+    def underwater_plot_data(self, nav_series: pd.Series) -> pd.Series:
+        """水下图数据（回撤序列）"""
+        cummax = nav_series.cummax()
+        drawdown = (nav_series - cummax) / cummax
+        return drawdown
+
+
+# 创建默认实例
+performance_analyzer = PerformanceAnalyzer()
