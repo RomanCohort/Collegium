@@ -1,0 +1,33 @@
+{
+  "strategy_metrics": {
+    "total_return": -0.09049774722599857,
+    "annual_return": -0.038993386112402995,
+    "annual_volatility": 0.1619184216929899,
+    "sharpe_ratio": -0.24082118454895474,
+    "max_drawdown": -0.16947341655099513,
+    "benchmark_return": -0.2960914155109079,
+    "excess_return": 0.20559366828490933,
+    "n_days": 601,
+    "n_stocks": 11,
+    "n_trades": 30
+  },
+  "bootstrap_confidence_intervals": {
+    "total_return_ci": [
+      -0.43282407271901313,
+      0.4551424150848498
+    ],
+    "annual_return_ci": [
+      -0.21193603137732636,
+      0.17063177841070154
+    ],
+    "sharpe_ci": [
+      -1.3147708322562932,
+      1.083317080301009
+    ]
+  },
+  "paired_test_results": {
+    "t_statistic": 0.7330314567826405,
+    "annual_t_statistic": 0.47505867951844605,
+    "p_value": 0.46382600533691587,
+    "mean_excess_return": 0.000657910670435161,
+    "significant_at_05": 

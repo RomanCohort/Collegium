@@ -1,0 +1,12 @@
+{
+  "total_return": -0.09049774722599857,
+  "annual_return": -0.038993386112402995,
+  "annual_volatility": 0.1619184216929899,
+  "sharpe_ratio": -0.24082118454895474,
+  "max_drawdown": -0.16947341655099513,
+  "benchmark_return": -0.2960914155109079,
+  "excess_return": 0.20559366828490933,
+  "n_days": 601,
+  "n_stocks": 11,
+  "n_trades": 30
+}

@@ -1,0 +1,84 @@
+{
+  "timestamp": "20260507_114648",
+  "data_source": "calibrated_virtual_market",
+  "n_stocks": 200,
+  "period": "2020-01-01 - 2024-12-31",
+  "results": {
+    "return_20d": {
+      "ic_mean": 0.5168511572830159,
+      "ic_std": 0.06386692924506256,
+      "icir": 8.092624500131699,
+      "ic_positive_ratio": 1.0,
+      "n_days": 1280
+    },
+    "return_60d": {
+      "ic_mean": 0.3565289742139905,
+      "ic_std": 0.08709574389715133,
+      "icir": 4.093528768750363,
+      "ic_positive_ratio": 1.0,
+      "n_days": 1240
+    },
+    "return_120d": {
+      "ic_mean": 0.2993682219734969,
+      "ic_std": 0.09860205860841115,
+      "icir": 3.036125166525762,
+      "ic_positive_ratio": 0.9991525423728813,
+      "n_days": 1180
+    },
+    "reversal_5d": {
+      "ic_mean": -1.0,
+      "ic_std": 4.1735045418844305e-17,
+      "icir": -99999999.58264954,
+      "ic_positive_ratio": 0.0,
+      "n_days": 1295
+    },
+    "reversal_20d": {
+      "ic_mean": -0.5168511572830159,
+      "ic_std": 0.06386692924506256,
+      "icir": -8.092624500131699,
+      "ic_positive_ratio": 0.0,
+      "n_days": 1280
+    },
+    "volatility_20d": {
+      "ic_mean": -0.01145072435267436,
+      "ic_std": 0.17127247592355913,
+      "icir": -0.06685676506023827,
+      "ic_positive_ratio": 0.41472868217054265,
+      "n_days": 1290
+    },
+    "volatility_60d": {
+      "ic_mean": -0.02132278919868761,
+      "ic_std": 0.19240674887140022,
+      "icir": -0.11082141461017604,
+      "ic_positive_ratio": 0.41023622047244096,
+      "n_days": 1270
+    },
+    "volume_ratio_20d": {
+      "ic_mean": -0.000574418138912265,
+      "ic_std": 0.07450858942407036,
+      "icir": -0.007709420702473928,
+      "ic_positive_ratio": 0.5050348567002324,
+      "n_days": 1291
+    },
+    "ma_return_20d": {
+      "ic_mean": 0.7525344883140564,
+      "ic_std": 0.041101098064813615,
+      "icir": 18.30934794087209,
+      "ic_positive_ratio": 1.0,
+      "n_days": 1291
+    },
+    "momentum_12m": {
+      "ic_mean": 0.0874510802028378,
+      "ic_std": 0.2033897680620099,
+      "icir": 0.42996792186958155,
+      "ic_positive_ratio": 0.5792452830188679,
+      "n_days": 1060
+    }
+  },
+  "summary": {
+    "avg_ic_mean": 0.04625348330141074,
+    "avg_icir": -9999997.389906734,
+    "best_factor": "ma_return_20d",
+    "best_icir": 18.30934794087209
+  }
+}

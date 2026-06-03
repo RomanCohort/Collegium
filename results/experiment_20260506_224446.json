@@ -1,0 +1,24 @@
+{
+  "timestamp": "20260506_224446",
+  "data_source": "akshare_real",
+  "config": {
+    "study_period": {
+      "start": "2020-01-01",
+      "end": "2024-12-31"
+    },
+    "index_codes": [
+      "sh000300",
+      "sh000905",
+      "sh000852"
+    ],
+    "n_stocks": 50,
+    "initial_cash": 1000000,
+    "commission": 0.0003,
+    "stamp_tax": 0.001,
+    "slippage": 0.001,
+    "rebalance_freq": "monthly",
+    "top_n": 30
+  },
+  "results": {},
+  "ic_stats": {}
+}
