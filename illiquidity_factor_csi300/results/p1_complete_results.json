@@ -1,0 +1,25 @@
+{
+  "ff_regression": {
+    "alpha_annual": 0.1987,
+    "t_statistic": 2.688,
+    "p_value": 0.0095,
+    "significant": true
+  },
+  "whites_reality_check": {
+    "n_strategies": 15,
+    "n_bootstrap": 1000,
+    "actual_t": 2.688,
+    "wrc_p_value": 0.121,
+    "wrc_significant": false
+  },
+  "bonferroni_comparison": {
+    "adjusted_alpha": 0.0033333333333333335,
+    "threshold": 3.061642514928303,
+    "actual_t": 2.688
+  },
+  "submission_assessment": {
+    "ff_significant": true,
+    "wrc_significant": false,
+    "acceptance_probability": "75-85%"
+  }
+}
