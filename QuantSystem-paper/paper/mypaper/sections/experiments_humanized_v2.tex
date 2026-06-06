@@ -1,0 +1,121 @@
+\section{Experiments}
+\label{sec:experiments}
+
+\subsection{Data}
+
+Real CSI 300 data from Baostock API: 94 stocks, 2020-2024, 1,212 trading days. Adjusted prices (splits, dividends handled), no missing values.
+
+Survivorship bias: we excluded delisted stocks. This probably overestimates returns by 1-2\% annually. See Discussion for details.
+
+\subsection{Factors}
+
+Ten factors, standard definitions:
+
+\begin{table}[h]
+\centering
+\caption{Factor Definitions}
+\begin{tabular}{llc}
+\toprule
+Factor & Formula & Category \\
+\midrule
+return\_20d & $(P_t / P_{t-20}) - 1$ & Momentum \\
+return\_60d & $(P_t / P_{t-60}) - 1$ & Momentum \\
+return\_120d & $(P_t / P_{t-120}) - 1$ & Momentum \\
+ma\_return\_20d & $P_t / MA_{20} - 1$ & Trend \\
+momentum\_12m & $(P_t / P_{t-252}) - 1$ & Momentum \\
+\midrule
+reversal\_5d & $\sum_{i=1}^{5} r_i$ & Reversal \\
+reversal\_20d & $\sum_{i=1}^{20} r_i$ & Reversal \\
+\midrule
+volatility\_20d & $\sigma_{20} \times \sqrt{252}$ & Risk \\
+volatility\_60d & $\sigma_{60} \times \sqrt{252}$ & Risk \\
+\midrule
+volume\_ratio & $V_{20}^{avg} / V_{60}^{avg}$ & Liquidity \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Processing: winsorize at 1st/99th percentiles, standardize to z-scores cross-sectionally.
+
+\subsection{IC Calculation}
+
+For each day: compute factor values for all stocks, compute 20-day forward returns, calculate Spearman rank correlation. Result: IC time series for each factor.
+
+\subsection{Weighting}
+
+\begin{equation}
+w_f = \frac{\max(0, ICIR_f)}{\sum_{f'} \max(0, ICIR_{f'})}
+\end{equation}
+
+where $ICIR_f = \bar{IC}_f / \sigma_{IC,f}$ over 60-day lookback. Negative IC factors get zero weight.
+
+\subsection{Portfolio}
+
+Composite score: $S_i = \sum_f w_f \times F_{i,f}$. Rank stocks, select top 20, equal-weight within portfolio.
+
+\subsection{Risk Control}
+
+Maximum drawdown: reduce 50\% if drawdown exceeds 25\%. Volatility targeting: scale to 15\% annual volatility. Stop loss: liquidate 50\% if single-day loss exceeds 5\%.
+
+\subsection{Costs}
+
+\begin{table}[h]
+\centering
+\caption{Transaction Costs}
+\begin{tabular}{lc}
+\toprule
+Component & Cost \\
+\midrule
+Commission & 0.03\% \\
+Stamp Duty & 0.10\% (sell) \\
+Slippage & 0.05\% \\
+\midrule
+Round-Trip & 0.15\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Monthly rebalancing costs about 1.8\% annually.
+
+\subsection{Walk-Forward}
+
+Training window: 60 days for IC estimation. Rebalancing: every 20 days. All returns are out-of-sample. No look-ahead bias.
+
+\subsection{Regime Definition}
+
+Bull: CSI 300 60-day return $> +15\%$. Bear: 60-day return $< -15\%$. Oscillation: between $-15\%$ and $+15\%$.
+
+\begin{table}[h]
+\centering
+\caption{Market Regime Classification (2020-2024)}
+\label{tab:regime_periods}
+\begin{tabular}{llcc}
+\toprule
+Period & Regime & 60-Day Return & Duration \\
+\midrule
+2020 Q1-Q2 & Bull & +27\% & 6 months \\
+2020 Q3-Q4 & Oscillation & +5\% & 6 months \\
+2021 Q1-Q2 & Bull & +18\% & 6 months \\
+2021 Q3-Q4 & Oscillation & -3\% & 6 months \\
+2022 Q1-Q3 & Bear & -21\% & 9 months \\
+2022 Q4-2023 Q4 & Oscillation & -8\% to +4\% & 15 months \\
+2024 & Oscillation & +2\% & 12 months \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Bull: 12 months (20\% of sample). Bear: 9 months (15\%). Oscillation: 39 months (65\%).
+
+\subsection{Statistics}
+
+Newey-West HAC:
+
+\begin{equation}
+\text{Var}_{NW}(\bar{r}) = \gamma_0 + 2 \sum_{j=1}^{L} w_j \gamma_j
+\end{equation}
+
+Bartlett kernel weights, Schwert automatic lag $L = \lfloor 4(T/100)^{2/9} \rfloor$.
+
+\subsection{Baselines}
+
+Equal-weighted factors, static IC weights (full-sample IC, no updating), CSI 300 buy-and-hold.

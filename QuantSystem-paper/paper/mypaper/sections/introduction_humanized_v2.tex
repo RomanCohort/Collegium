@@ -1,0 +1,30 @@
+\section{Introduction}
+\label{sec:introduction}
+
+\subsection{Background and Research Question}
+
+Multi-factor models have been around since Fama and French introduced their three-factor framework in 1993. The hard part is not building the factors. The hard part is deciding how much weight to give each one, especially when market conditions change.
+
+Our question: Can IC-based weighting provide a practical, interpretable approach to factor timing for Chinese A-shares?
+
+\subsection{Data Statement}
+
+We obtained real CSI 300 market data via Baostock API: 94 constituent stocks, 1,212 trading days (2020-01-01 to 2024-12-31). All results are from walk-forward backtesting with realistic costs. No simulation.
+
+\subsection{Problem Statement}
+
+Factor ICs vary over time. Static weights calibrated over long horizons misallocate when conditions shift. The 2022 Chinese market correction is a case in point: momentum factors that worked in 2020-2021 stopped working.
+
+Three issues with existing approaches. First, static weights ignore IC dynamics. Second, slow-adapting rules cannot respond to rapid regime changes. Third, regime-agnostic weighting fails to exploit conditional factor effectiveness.
+
+\subsection{Research Contribution}
+
+We propose an IC-based dynamic weighting methodology with three components: rolling IC estimation, ICIR-based weighting, and risk control (drawdown limits, volatility targeting).
+
+Our contributions: real CSI 300 validation (94 stocks, 1,212 days), correct Newey-West HAC statistics with Schwert lag selection, transparent reporting of marginal significance (p = 0.085 two-tailed, 0.0425 one-tailed), and documented factor ICs (momentum ICIR = 1.49, 96\% positive days).
+
+The strategy achieved 14.79\% annualized return with 15.31\% maximum drawdown, Sharpe ratio 0.71. The statistics are marginal. The economics are meaningful.
+
+\subsection{Paper Organization}
+
+Section~\ref{sec:related} reviews related work. Section~\ref{sec:methodology} presents the IC-based weighting framework. Section~\ref{sec:results} presents real data results. Section~\ref{sec:discussion} discusses implications and limitations. Section~\ref{sec:conclusion} concludes with recommendations.

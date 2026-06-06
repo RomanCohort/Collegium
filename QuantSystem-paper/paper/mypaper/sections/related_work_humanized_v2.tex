@@ -1,0 +1,32 @@
+\section{Related Work}
+\label{sec:related}
+
+\subsection{Static Factor Weighting}
+
+Traditional multi-factor models use fixed weights. Fama and French~\cite{fama1993} equal-weighted their factor portfolios. Barra~\cite{rosenberg1974} and MSCI derive weights through risk model optimization.
+
+Gu et al.~\cite{gu2020} found neural networks outperform linear methods for return prediction, but focused on accuracy rather than adaptive weighting. Green et al.~\cite{green2017} documented IC variation over time, motivating dynamic weighting without implementing one.
+
+\subsection{Factor Timing}
+
+Arnott et al.~\cite{arnott2016timing} showed factor premiums exhibit predictable variation. Cohen et al.~\cite{cohen2020bounds} established theoretical bounds: perfect timing is impossible, but meaningful timing is achievable.
+
+Blitz et al.~\cite{blitz2020factormomentum} documented factor momentum: factors that performed well recently tend to continue. This directly supports IC-based weighting. Kelly and Jiang~\cite{kelly2023characteristics} interpreted firm characteristics as covariance risk proxies.
+
+\subsection{Adaptive Weighting}
+
+IC-based weighting uses rolling Spearman correlation to measure factor effectiveness. Prior work~\cite{qian2015,grinold2000} used IC to identify crowding and adjust exposures, but without systematic walk-forward validation.
+
+Risk model optimization~\cite{clarke2016} adjusts weights based on volatility forecasts but does not incorporate IC dynamics. Neural network approaches~\cite{gu2020} achieve high in-sample fit but lack interpretability.
+
+\subsection{Regime-Dependent Effects}
+
+Asness et al.~\cite{asness2013} showed momentum returns are positive in trending markets but negative during reversals. Novy-Marx~\cite{novy-marx2013} documented quality factor effectiveness during downturns. In Chinese markets, Liu et al.~\cite{liu2019} identified distinct factor behaviors. Liu and Ma~\cite{liu2022review} noted higher volatility and more frequent regime transitions.
+
+\subsection{Walk-Forward Validation}
+
+Walk-forward optimization addresses overfitting by separating training and testing periods. Beggs and Chi~\cite{beggs2018} showed it provides more realistic estimates than traditional backtesting. This methodology has been applied to strategy development~\cite{arnold2019} and risk validation~\cite{prado2018}.
+
+\subsection{Positioning}
+
+We differ from existing work in five ways. First, we implement real-time IC tracking with exponential decay rather than fixed weights. Second, we preserve interpretability rather than using black-box neural networks. Third, we provide walk-forward validation on Chinese A-shares across multiple regime transitions including the 2022 correction. Fourth, we frame IC-based weighting as lightweight factor timing with theoretical support. Fifth, we integrate risk controls that address practical deployment concerns~\cite{demiguel2009,jorion1996,rockafellar2000}.
