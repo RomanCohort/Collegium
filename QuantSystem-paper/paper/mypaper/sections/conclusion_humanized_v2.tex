@@ -1,0 +1,26 @@
+\section{Conclusion}
+\label{sec:conclusion}
+
+We tested IC-based dynamic factor weighting on real CSI 300 data from Baostock API. The sample covers 94 stocks over 1,212 trading days (2020-2024).
+
+\subsection{What We Found}
+
+The 60-day return factor showed IC = +0.30 with ICIR = 1.49 and positive IC on 96\% of days. This is strong by academic standards. The strategy returned 14.79\% annually after costs (0.15\% round-trip) with 15.31\% maximum drawdown. The CSI 300 benchmark experienced drawdowns exceeding 40\% over the same period.
+
+The Sharpe ratio came in at 0.71. Newey-West HAC tests: t-statistic = 1.750, two-tailed p-value = 0.085, one-tailed p-value = 0.0425. Statistically marginal by conventional thresholds, but the economic result holds.
+
+\subsection{What We Contributed}
+
+We implemented Newey-West HAC correctly (Schwert lag selection), used strict walk-forward validation, and disclosed all parameters. The code and data are public at \url{https://github.com/RomanCohort/Collegium}.
+
+\subsection{For Practitioners}
+
+Use momentum factors in CSI 300. Rebalance monthly to control costs. Hold 20-30 stocks for diversification. Expect 10-15\% annual returns, not 30\%+. The 96\% positive-IC finding for 60-day momentum persisted through the 2022 bear market, which suggests the effect is structural rather than luck.
+
+\subsection{Limitations We Acknowledge}
+
+Survivorship bias: we excluded delisted stocks. This probably inflates returns by 1-2\% annually. Future work should use CSMAR or Wind data that includes historical constituents. The sample covers only CSI 300, not the full A-share market. We tested 10 factors, not the full 25-factor framework in the appendix. The 5-year period is shorter than ideal.
+
+\subsection{The Honest Summary}
+
+This is not an alpha machine. It is a systematic, factor-based approach with controlled drawdown that produced positive returns across diverse market conditions. The statistics are marginal. The economics are meaningful. We think that is worth reporting.

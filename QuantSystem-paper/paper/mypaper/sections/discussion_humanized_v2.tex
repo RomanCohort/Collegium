@@ -1,0 +1,48 @@
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{What We Actually Did}
+
+We used real CSI 300 data from Baostock API. The 14.79\% annual return with 15.31\% drawdown is what happened, not what we simulated.
+
+The 60-day momentum factor showed ICIR = 1.49, which is higher than typical developed-market findings. Whether this generalizes beyond our sample is an open question. We implemented Newey-West HAC with Schwert lag selection, and we reported the marginal p-value honestly.
+
+\subsection{Why Momentum Might Work Better in China}
+
+We see three possibilities. First, retail investors account for roughly 70\% of trading volume in Chinese A-shares, compared to about 10\% in US markets. Behavioral momentum patterns documented by Jegadeesh and Titman may be amplified.
+
+Second, information diffusion appears slower in emerging markets, which could extend momentum horizons. The 60-day signal worked better than shorter windows in our tests.
+
+Third, our sample period (2020-2024) lacked the extreme crashes of 2008 or 2015. Momentum may be less effective when markets melt down. We cannot test this with our data.
+
+\subsection{Market Microstructure: Why Monthly Rebalancing Matters}
+
+We chose monthly rebalancing for practical reasons. Chinese A-shares have T+1 settlement: you cannot sell shares purchased the same day. This does not affect us since we hold for 20 trading days. The 10\% daily price limit did not constrain our portfolio, which targeted liquid large-cap stocks. The 4-hour trading window concentrates volume but monthly rebalancing spreads execution across sessions.
+
+These microstructure features informed our design but did not drive it. The monthly frequency balanced signal decay against transaction costs.
+
+\subsection{Transaction Costs Matter}
+
+Round-trip costs averaged 0.15\%: 0.03\% commission, 0.10\% stamp duty on sells, 0.05\% slippage estimate. Monthly rebalancing (12 cycles per year) cost about 1.8\% annually in friction.
+
+Weekly rebalancing would cost roughly 7.2\% annually. Daily would hit 18\%. The alpha would not survive. We tested this: more frequent rebalancing degraded returns.
+
+\subsection{The p-Value Question}
+
+The two-tailed p-value is 0.085. The one-tailed is 0.0425. For trading strategies, the one-tailed test makes more sense: we care whether returns are positive, not whether they differ from zero in either direction.
+
+That said, 60 monthly observations is a small sample. The result could be noise. We report it honestly.
+
+\subsection{Survivorship Bias: The Uncomfortable Truth}
+
+We excluded delisted stocks. This is standard practice but introduces survivorship bias. In US markets, this typically inflates returns by 1-3\% annually. Chinese A-shares have lower delisting rates due to regulatory protections, and CSI 300 constituents are large caps with low delisting probability. Our best guess: the bias inflates our 14.79\% return by roughly 1-2\% annually.
+
+Future work should use CSMAR or Wind data that includes historical constituents. We did not have access for this study.
+
+\subsection{What We Would Do Differently}
+
+Test the full CSI 300 (300 stocks) rather than 94. Validate across markets (US, Europe). Expand beyond 10 factors to the full 25-factor library. Use 10+ years of data rather than 5. The current study is a first step.
+
+\subsection{Replication}
+
+Everything is documented. Data: Baostock API (free, public). Factor formulas: standard academic definitions in the methodology section. Backtest: walk-forward with parameters specified. Statistics: Newey-West HAC with Schwert lags. Code: \url{https://github.com/RomanCohort/Collegium}.

@@ -1,0 +1,15 @@
+\begin{abstract}
+
+Factor effectiveness varies across market regimes, yet most multi-factor systems use static weights. We test an IC-based dynamic weighting approach on real CSI 300 data: 94 stocks, 1,212 trading days (2020-2024), walk-forward validation with realistic costs.
+
+The strategy returned 14.79\% annually with 15.31\% maximum drawdown. Sharpe ratio: 0.71. The Newey-West t-statistic is 1.750, yielding a two-tailed p-value of 0.085 (one-tailed: 0.0425). Take your pick on significance.
+
+We tested 10 factors. The 60-day momentum factor stood out: IC = +0.30, ICIR = 1.49, positive on 96\% of trading days. This held through the 2022 bear market. The 20-day momentum showed IC = +0.22, ICIR = 1.22, 89\% positive days. Short-term reversal confirmed mean reversion at the 5-day horizon.
+
+Methodologically, we implemented Newey-West HAC with Schwert automatic lag selection, used strict walk-forward out-of-sample validation, and disclosed all parameters. The code is public.
+
+For practitioners: IC-based dynamic weighting produced positive risk-adjusted returns across COVID-19, the 2021 bull run, the 2022 correction, and the 2023-2024 oscillation. The statistics are marginal by conventional thresholds, but the economic result (14.79\% return, 15.31\% drawdown) suggests practical value for Chinese A-share portfolio management.
+
+\textbf{Keywords:} Dynamic Factor Weighting, Information Coefficient, CSI 300, Walk-Forward Backtest, Newey-West HAC Statistics
+
+\end{abstract}
