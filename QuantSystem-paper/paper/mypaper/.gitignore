@@ -1,0 +1,45 @@
+# Large files - Git has 100MB limit
+electron/
+node_modules/
+*.zip
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.bak
+*~
+
+# Data files (large)
+*.h5
+*.pkl
+*.pickle
+*.parquet
+checkpoints/
