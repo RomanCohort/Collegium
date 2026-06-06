@@ -1,0 +1,227 @@
+\section{Experiments}
+\label{sec:experiments}
+
+\subsection{Data Acquisition}
+
+We obtained real CSI 300 market data via Baostock API:
+
+\begin{table}[h]
+\centering
+\caption{Data Summary}
+\begin{tabular}{ll}
+\toprule
+Parameter & Value \\
+\midrule
+Data Source & Baostock API \\
+Stocks & 94 CSI 300 constituents \\
+Period & 2020-01-01 to 2024-12-31 \\
+Trading Days & 1,212 \\
+Total Records & 71,508+ \\
+Update Frequency & Daily (end-of-day) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Data Quality}:
+\begin{itemize}
+    \item Adjusted prices (splits, dividends)
+    \item No missing values in final dataset
+    \item \textbf{Survivorship bias limitation}: Delisted stocks excluded from sample---this may overestimate returns by 1-2\% annually (see Discussion section for detailed analysis)
+\end{itemize}
+
+\subsection{Factor Construction}
+
+We compute 10 factors commonly used in academic literature:
+
+\begin{table}[h]
+\centering
+\caption{Factor Definitions}
+\begin{tabular}{llc}
+\toprule
+Factor & Formula & Category \\
+\midrule
+return\_20d & $(P_t / P_{t-20}) - 1$ & Momentum \\
+return\_60d & $(P_t / P_{t-60}) - 1$ & Momentum \\
+return\_120d & $(P_t / P_{t-120}) - 1$ & Momentum \\
+ma\_return\_20d & $P_t / MA_{20} - 1$ & Trend \\
+momentum\_12m & $(P_t / P_{t-252}) - 1$ & Momentum \\
+\midrule
+reversal\_5d & $\sum_{i=1}^{5} r_i$ & Reversal \\
+reversal\_20d & $\sum_{i=1}^{20} r_i$ & Reversal \\
+\midrule
+volatility\_20d & $\sigma_{20} \times \sqrt{252}$ & Risk \\
+volatility\_60d & $\sigma_{60} \times \sqrt{252}$ & Risk \\
+\midrule
+volume\_ratio & $V_{20}^{avg} / V_{60}^{avg}$ & Liquidity \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Processing}:
+\begin{enumerate}
+    \item Winsorize at 1st/99th percentiles (cross-sectional)
+    \item Standardize to z-scores (cross-sectional)
+    \item Handle missing values with forward fill (max 5 days)
+\end{enumerate}
+
+\subsection{IC Calculation}
+
+For each trading day $t$:
+
+\begin{enumerate}
+    \item Compute factor values for all stocks
+    \item Compute 20-day forward returns: $r_{t+20} = P_{t+20}/P_t - 1$
+    \item Calculate Spearman rank correlation between factor and forward returns
+    \item Result: IC time series $\{IC_t\}$ for each factor
+\end{enumerate}
+
+\subsection{IC-Based Weighting}
+
+Factor weights computed from rolling IC statistics:
+
+\begin{equation}
+w_f = \frac{\max(0, ICIR_f)}{\sum_{f'} \max(0, ICIR_{f'})}
+\end{equation}
+
+where $ICIR_f = \bar{IC}_f / \sigma_{IC,f}$ over lookback window (60 days).
+
+\textbf{Constraints}:
+\begin{itemize}
+    \item Minimum weight: 0 (exclude negative IC factors)
+    \item Maximum weight: 0.25 (prevent over-concentration)
+    \item Rebalancing: Monthly (every 20 trading days)
+\end{itemize}
+
+\subsection{Portfolio Construction}
+
+\begin{enumerate}
+    \item Compute composite score: $S_i = \sum_f w_f \times F_{i,f}$
+    \item Rank stocks by composite score
+    \item Select top 20 stocks (long-only)
+    \item Equal-weight within portfolio
+\end{enumerate}
+
+\subsection{Risk Control}
+
+\textbf{Three-layer protection}:
+
+\begin{enumerate}
+    \item \textbf{Maximum Drawdown Limit}: Reduce position 50\% if drawdown > 25\%
+    \item \textbf{Volatility Target}: Scale positions to target 15\% annual volatility
+    \item \textbf{Stop Loss}: Liquidate 50\% if single-day loss > 5\%
+\end{enumerate}
+
+\subsection{Transaction Costs}
+
+Realistic costs for Chinese A-share market:
+
+\begin{table}[h]
+\centering
+\caption{Transaction Cost Breakdown}
+\begin{tabular}{lc}
+\toprule
+Component & Cost \\
+\midrule
+Commission & 0.03\% (both sides) \\
+Stamp Duty & 0.10\% (sell only) \\
+Slippage & 0.05\% (estimated) \\
+\midrule
+Round-Trip Total & 0.15\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Monthly rebalancing results in approximately 1.8\% annual cost drag.
+
+\subsection{Walk-Forward Protocol}
+
+\begin{enumerate}
+    \item \textbf{Training Window}: 60 days for IC estimation
+    \item \textbf{Rebalancing}: Every 20 days
+    \item \textbf{Out-of-Sample}: All returns are forward-looking
+    \item \textbf{No Look-Ahead}: Factor weights determined before holding period
+\end{enumerate}
+
+\subsection{Market Regime Definition}
+
+We quantitatively define market regimes using CSI 300 index returns:
+
+\textbf{Regime Classification Rules}:
+\begin{itemize}
+    \item \textbf{Bull Market}: CSI 300 60-day cumulative return $> +15\%$
+    \item \textbf{Bear Market}: CSI 300 60-day cumulative return $< -15\%$
+    \item \textbf{Oscillation}: 60-day return between $-15\%$ and $+15\%$
+\end{itemize}
+
+\textbf{Threshold Justification}: The $\pm 15\%$ thresholds correspond to approximately 1.5 standard deviations of 60-day returns in CSI 300 historical data, capturing significant market moves while filtering noise.
+
+Table~\ref{tab:regime_periods} shows the resulting regime classification for our sample period.
+
+\begin{table}[h]
+\centering
+\caption{Market Regime Classification (2020-2024)}
+\label{tab:regime_periods}
+\begin{tabular}{llcc}
+\toprule
+Period & Regime & 60-Day Return & Duration \\
+\midrule
+2020 Q1-Q2 & Bull & +27\% (COVID recovery) & 6 months \\
+2020 Q3-Q4 & Oscillation & +5\% & 6 months \\
+2021 Q1-Q2 & Bull & +18\% (structural rally) & 6 months \\
+2021 Q3-Q4 & Oscillation & -3\% & 6 months \\
+2022 Q1-Q3 & Bear & -21\% (correction) & 9 months \\
+2022 Q4-2023 Q4 & Oscillation & -8\% to +4\% & 15 months \\
+2024 & Oscillation & +2\% & 12 months \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Regime Summary}:
+\begin{itemize}
+    \item Bull periods: 12 months (20\% of sample)
+    \item Bear periods: 9 months (15\% of sample)
+    \item Oscillation: 39 months (65\% of sample)
+\end{itemize}
+
+\subsection{Statistical Testing}
+
+We implement Newey-West HAC standard errors:
+
+\begin{equation}
+\text{Var}_{NW}(\bar{r}) = \gamma_0 + 2 \sum_{j=1}^{L} w_j \gamma_j
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $\gamma_j$ = autocovariance at lag $j$
+    \item $w_j = 1 - j/(L+1)$ = Bartlett kernel weight
+    \item $L = \lfloor 4(T/100)^{2/9} \rfloor$ = Schwert automatic lag
+\end{itemize}
+
+\textbf{Implementation}:
+\begin{enumerate}
+    \item Compute monthly return series $\{r_1, ..., r_N\}$
+    \item Calculate mean return $\bar{r}$
+    \item Compute residuals $e_t = r_t - \bar{r}$
+    \item Calculate Newey-West variance
+    \item t-statistic = $\bar{r} / SE_{NW}$
+    \item p-value from t-distribution with N-1 degrees of freedom
+\end{enumerate}
+
+\subsection{Baseline Comparisons}
+
+We compare against:
+
+\begin{enumerate}
+    \item \textbf{Equal-Weight}: All factors weighted equally
+    \item \textbf{Static IC}: Fixed weights from full-sample IC
+    \item \textbf{CSI 300 Index}: Buy-and-hold benchmark
+\end{enumerate}
+
+\subsection{Robustness Tests}
+
+\begin{enumerate}
+    \item \textbf{Rebalancing Frequency}: Weekly, bi-weekly, monthly, quarterly
+    \item \textbf{Portfolio Size}: 10, 20, 30, 50 stocks
+    \item \textbf{Lookback Window}: 30, 60, 90 days
+\end{enumerate}

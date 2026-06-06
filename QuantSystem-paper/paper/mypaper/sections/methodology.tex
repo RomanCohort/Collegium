@@ -1,0 +1,220 @@
+\section{Methodology}
+\label{sec:methodology}
+
+\subsection{Overview}
+
+We propose an IC-based dynamic factor weighting framework that adapts factor exposures based on time-varying effectiveness estimates conditioned on detected market regimes. The methodology consists of four components: (1) rolling IC estimation with exponential decay, (2) regime detection and conditional multipliers, (3) walk-forward optimization for out-of-sample validation, and (4) risk control constraints for practical deployment.
+
+\subsection{Factor Library}
+
+We design a comprehensive factor library comprising 25 predictive signals organized into five categories. In this study, we implement 10 core factors for validation, with the full 25-factor framework detailed in Appendix~\ref{sec:factor_appendix}.
+
+\begin{table}[h]
+\centering
+\caption{Core Factors Implemented in This Study (10 of 25)}
+\label{tab:factors}
+\begin{tabular}{llc}
+\toprule
+Category & Factors & Count \\
+\midrule
+Momentum & return\_20d, return\_60d, return\_120d, ma\_return\_20d, momentum\_12m & 5 \\
+Reversal & reversal\_5d, reversal\_20d & 2 \\
+Volatility & volatility\_20d, volatility\_60d & 2 \\
+Liquidity & volume\_ratio & 1 \\
+\midrule
+\textbf{Total} & & \textbf{10} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The 10 core factors were selected based on data availability and computational simplicity for initial validation. The Appendix provides complete construction formulas for all 25 factors including quality factors (roe, roa, accruals), sentiment factors (money flow, northbound holdings), and additional technical factors. Future work will validate the extended factor set.
+
+Factor construction follows standard academic definitions. Momentum factors measure cumulative returns over past periods. Reversal factors capture short-term mean reversion. Volatility factors measure risk characteristics. All factors are winsorized at the 1st and 99th percentiles and standardized cross-sectionally.
+
+\subsection{Rolling IC Estimation with Exponential Decay}
+
+The Information Coefficient for factor $f$ at time $t$ is computed as the Spearman rank correlation between cross-sectional factor values and forward returns:
+
+\begin{equation}
+IC_{f,t} = \rho_{\text{Spearman}}(\mathbf{f}_t, \mathbf{r}_{t+1:t+N})
+\end{equation}
+
+where $\mathbf{f}_t \in \mathbb{R}^{n}$ represents factor values across $n$ stocks and $\mathbf{r}_{t+1:t+N}$ denotes $N$-day forward returns. We use $N=20$ trading days (one month) as the prediction horizon.
+
+To capture recent effectiveness while smoothing short-term noise, we compute decay-weighted IC mean and ICIR:
+
+\begin{equation}
+\overline{IC}_{f,t} = \frac{\sum_{i=0}^{W-1} \gamma^i \cdot IC_{f,t-i}}{\sum_{i=0}^{W-1} \gamma^i}
+\end{equation}
+
+\begin{equation}
+ICIR_{f,t} = \frac{\overline{IC}_{f,t}}{\sigma_{IC,f,t}}
+\end{equation}
+
+where $W = 60$ trading days is the lookback window and $\gamma \in (0,1)$ is the decay factor. Higher $\gamma$ gives more weight to recent observations, with effective window length approximately $W_{\text{eff}} = 1/(1-\gamma)$.
+
+\subsection{Base Weight Computation}
+
+The base factor weight is computed from IC metrics, with negative-IC factors explicitly excluded:
+
+\begin{equation}
+w_{f,t}^{\text{base}} = \begin{cases}
+\min\left(\frac{\overline{IC}_{f,t}}{\sigma_{IC,f,t}} \cdot \eta, w_{\text{max}}\right) & \text{if } \overline{IC}_{f,t} > 0 \\
+0 & \text{if } \overline{IC}_{f,t} \leq 0
+\end{cases}
+\end{equation}
+
+where $\eta = 0.1$ is a scaling parameter and $w_{\text{max}} = 0.15$ caps individual factor weights to prevent concentration. This formulation ensures that only factors with positive predictive power (positive average IC) receive positive weights. Factors with negative or zero average IC are excluded from the portfolio.
+
+Weights are normalized to sum to one:
+
+\begin{equation}
+w_{f,t} = \frac{w_{f,t}^{\text{base}}}{\sum_{f'} w_{f',t}^{\text{base}}}
+\end{equation}
+
+This formulation has three key properties: (1) factors with higher ICIR receive larger weights, (2) only factors with positive average IC contribute to the portfolio (negative-IC factors are excluded), and (3) the weight cap prevents any single factor from dominating the portfolio.
+
+\subsection{Regime Detection and Conditional Multipliers}
+
+Market regime conditions modulate base weights through regime-specific multipliers. We detect three regimes (Bull, Bear, Oscillation) using a combination of trend and volatility indicators:
+
+\begin{itemize}
+    \item \textbf{Bull Regime}: Price above 60-day MA, realized volatility below 20\% annualized, positive 20-day momentum
+    \item \textbf{Bear Regime}: Price below 60-day MA, realized volatility above 25\% annualized, negative 20-day momentum
+    \item \textbf{Oscillation Regime}: Neither bull nor bear conditions satisfied
+\end{itemize}
+
+Based on documented factor effectiveness in academic literature~\cite{arnott2016timing,blitz2020factormomentum}, we apply regime-specific multipliers:
+
+\begin{table}[h]
+\centering
+\caption{Regime-Specific Factor Multipliers}
+\label{tab:multipliers}
+\begin{tabular}{lccc}
+\toprule
+Factor Category & Bull & Bear & Oscillation \\
+\midrule
+Momentum & 1.3$\times$ & 0.7$\times$ & 1.0$\times$ \\
+Quality & 0.8$\times$ & 1.2$\times$ & 1.0$\times$ \\
+Liquidity & 0.9$\times$ & 1.1$\times$ & 1.0$\times$ \\
+Volatility & 1.0$\times$ & 1.1$\times$ & 1.0$\times$ \\
+Sentiment & 1.0$\times$ & 1.0$\times$ & 1.0$\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The final adjusted weight is:
+
+\begin{equation}
+w_{f,t}^{\text{adjusted}} = w_{f,t} \cdot m_{\text{regime},f}
+\end{equation}
+
+where $m_{\text{regime},f}$ is the regime-specific multiplier for factor $f$. Adjusted weights are renormalized to maintain unit sum.
+
+\subsection{Risk Control Module}
+
+For practical deployment, we implement a risk control module with three constraints:
+
+\subsubsection{Maximum Drawdown Constraint}
+
+A hard stop-loss triggers when portfolio drawdown exceeds threshold $D_{\max}$:
+
+\begin{equation}
+\text{Position}_{t} = \begin{cases}
+\text{Position}_{t-1} \cdot 0.5 & \text{if } DD_t \geq 0.25 \\
+0 & \text{if } DD_t \geq D_{\max}
+\end{cases}
+\end{equation}
+
+where $D_{\max} = 0.30$ (30\%) for institutional acceptability.
+
+\subsubsection{Volatility Targeting}
+
+Position sizes are scaled to maintain constant volatility target $\sigma_{\text{target}}$:
+
+\begin{equation}
+\text{Leverage}_t = \frac{\sigma_{\text{target}}}{\sigma_{\text{realized},t}}
+\end{equation}
+
+with $\sigma_{\text{target}} = 0.15$ (15\% annualized).
+
+\subsubsection{Regime-Based Deleveraging}
+
+In Bear regime, positions are automatically reduced by 50\%:
+
+\begin{equation}
+\text{Position}_t^{\text{final}} = \text{Position}_t \cdot \begin{cases}
+0.5 & \text{if Bear regime} \\
+1.0 & \text{otherwise}
+\end{cases}
+\end{equation}
+
+\subsection{Walk-Forward Optimization Framework}
+
+To ensure out-of-sample robustness, we employ walk-forward validation with the following structure:
+
+\begin{itemize}
+    \item \textbf{Training Window}: Rolling 12 months (approximately 250 trading days)
+    \item \textbf{Test Window}: Subsequent 3 months (approximately 60 trading days)
+    \item \textbf{Rebalancing Frequency}: Monthly portfolio rebalancing
+    \item \textbf{Rolling Procedure}: At each rebalance date, we retrain IC estimates and update weights
+\end{itemize}
+
+This ensures that factor weights at any point are determined solely from information available at that time, preventing look-ahead bias. The 12-month training window captures medium-term IC dynamics while the 3-month test window provides sufficient holding period to evaluate effectiveness.
+
+\subsection{Portfolio Construction}
+
+At each monthly rebalance date, we:
+
+\begin{enumerate}
+    \item Compute IC estimates using the trailing 60-day window
+    \item Detect current market regime
+    \item Calculate regime-adjusted factor weights
+    \item Apply risk control constraints
+    \item Rank stocks by composite factor score: $S_{i,t} = \sum_f w_{f,t} \cdot f_{i,t}$
+    \item Select top 30 stocks by composite score
+    \item Allocate equal weights to selected stocks
+\end{enumerate}
+
+Transaction costs are modeled as:
+\begin{itemize}
+    \item Commission: 0.03\%
+    \item Stamp duty: 0.1\% (sell side only)
+    \item Slippage: 0.01\%
+\end{itemize}
+
+These costs reflect realistic trading conditions in Chinese A-share markets.
+
+\subsection{Parameter Sensitivity Analysis}
+
+We test robustness of key hyperparameters:
+
+\begin{table}[h]
+\centering
+\caption{Parameter Sensitivity Analysis}
+\label{tab:sensitivity}
+\begin{tabular}{lcccc}
+\toprule
+Parameter & Values Tested & Sharpe Range & Max DD Range & Optimal \\
+\midrule
+Lookback Window $W$ & 30, 60, 90 days & [0.15, 0.18] & [28\%, 35\%] & 60 \\
+Decay Factor $\gamma$ & 0.90, 0.95, 0.98 & [0.16, 0.18] & [29\%, 33\%] & 0.95 \\
+Max Weight $w_{\max}$ & 0.10, 0.15, 0.20 & [0.17, 0.18] & [28\%, 32\%] & 0.15 \\
+DD Limit $D_{\max}$ & 0.25, 0.30, 0.35 & [0.16, 0.19] & [25\%, 35\%] & 0.30 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Results show robust performance across reasonable parameter ranges, with optimal values: $W=60$, $\gamma=0.95$, $w_{\max}=0.15$, $D_{\max}=0.30$.
+
+\subsection{Baseline Comparison Methods}
+
+We compare the proposed IC-based dynamic weighting against three baselines:
+
+\begin{enumerate}
+    \item \textbf{Equal Weight}: All 25 factors receive equal weight $w_f = 1/25$
+    \item \textbf{Static IC Weight}: Weights based on full-period IC estimates without updating
+    \item \textbf{IC Weight without Regime}: Pure IC-based weighting without regime multipliers
+\end{enumerate}
+
+This decomposition allows us to quantify the marginal contribution of (1) dynamic updating versus static weights, and (2) regime-aware adjustments versus pure IC weighting.
